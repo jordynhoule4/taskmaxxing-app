@@ -57,7 +57,7 @@ export default function LoginPage() {
             <Calendar className="text-blue-600" size={32} />
             <h1 className="text-3xl font-bold text-gray-800">Taskmaxxing</h1>
           </div>
-          <p className="text-gray-600">Level up your productivity game</p>
+          <p className="text-gray-600">Take the task pill today</p>
         </div>
 
         <div className="bg-white rounded-xl shadow-lg p-8">
@@ -149,7 +149,7 @@ export default function LoginPage() {
                     onChange={(e) => setRememberMe(e.target.value)}
                     className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
                   />
-                  <span className="ml-2 text-sm text-gray-700">Remember me forever 🚀</span>
+                  <span className="ml-2 text-sm text-gray-700">Remember me forever 💊</span>
                 </label>
               </div>
             </div>

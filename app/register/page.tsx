@@ -62,7 +62,7 @@ export default function RegisterPage() {
             </div>
             <h2 className="text-2xl font-semibold text-gray-800 mb-4">Account Created!</h2>
             <p className="text-green-600 mb-6">
-              Welcome to Taskmaxxing! You'll be redirected to login shortly.
+              The pill has been taken! You'll be redirected to login shortly.
             </p>
             <div className="w-full bg-gray-200 rounded-full h-2">
               <div className="bg-green-600 h-2 rounded-full animate-pulse w-full"></div>
@@ -81,7 +81,7 @@ export default function RegisterPage() {
             <Calendar className="text-purple-600" size={32} />
             <h1 className="text-3xl font-bold text-gray-800">Taskmaxxing</h1>
           </div>
-          <p className="text-gray-600">Start your productivity journey</p>
+          <p className="text-gray-600">Ready to swallow the productivity pill?</p>
         </div>
 
         <div className="bg-white rounded-xl shadow-lg p-8">

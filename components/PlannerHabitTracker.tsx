@@ -278,7 +278,7 @@ export default function PlannerHabitTracker() {
           </button>
         </div>
         
-        <p className="text-gray-600">Level up your productivity game! 🚀</p>
+        <p className="text-gray-600">Take the task pill today! 💊</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -289,30 +289,32 @@ export default function PlannerHabitTracker() {
               Daily Tasks
             </h2>
             
-            <div className="mb-4 flex gap-2">
+            <div className="mb-4 flex flex-col sm:flex-row gap-2">
               <select
                 value={selectedDay}
                 onChange={(e) => setSelectedDay(e.target.value)}
-                className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 sm:w-auto"
               >
                 {days.map(day => (
                   <option key={day} value={day}>{day}</option>
                 ))}
               </select>
-              <input
-                type="text"
-                value={newTask}
-                onChange={(e) => setNewTask(e.target.value)}
-                placeholder="Add new task"
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                onKeyPress={(e) => e.key === 'Enter' && addTask()}
-              />
-              <button
-                onClick={addTask}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-              >
-                <Plus size={20} />
-              </button>
+              <div className="flex gap-2 flex-1">
+                <input
+                  type="text"
+                  value={newTask}
+                  onChange={(e) => setNewTask(e.target.value)}
+                  placeholder="Add new task"
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  onKeyPress={(e) => e.key === 'Enter' && addTask()}
+                />
+                <button
+                  onClick={addTask}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex-shrink-0"
+                >
+                  <Plus size={20} />
+                </button>
+              </div>
             </div>
 
             <div className="space-y-4">
