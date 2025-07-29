@@ -5,36 +5,20 @@ export default function HomePage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
       <header className="container mx-auto px-6 py-8">
-        <nav className="flex justify-between items-center">
+        <nav className="flex justify-center items-center">
           <div className="flex items-center gap-2">
             <Calendar className="text-blue-600" size={32} />
             <span className="text-2xl font-bold text-gray-800">Taskmaxxing</span>
-          </div>
-          <div className="flex gap-4">
-            <Link
-              href="/login"
-              className="px-4 py-2 text-gray-600 hover:text-gray-800 font-medium"
-            >
-              Sign In
-            </Link>
-            <Link
-              href="/register"
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
-            >
-              Get Started
-            </Link>
           </div>
         </nav>
       </header>
 
       <section className="container mx-auto px-6 py-16 text-center">
         <h1 className="text-5xl font-bold text-gray-800 mb-6">
-          Max Out Your Tasks,<br />
-          <span className="text-blue-600">Level Up Your Life</span>
+          <span className="text-blue-600">Take The Task Pill Today</span>
         </h1>
         <p className="text-xl text-gray-600 mb-8 max-w-2xl mx-auto">
-          Turn productivity into a game. Track habits, plan weeks, unlock achievements, 
-          and watch yourself become the ultimate task master.
+          Track habits, plan out your week, and become the ultimate Taskmaxxer.
         </p>
         <div className="flex gap-4 justify-center">
           <Link
