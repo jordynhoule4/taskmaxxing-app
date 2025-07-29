@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 interface Habit {
   id: number;
   name: string;
+  target: number;
 }
 
 // Helper function to get Monday of current week
@@ -25,6 +26,7 @@ export default function PlannerHabitTracker() {
   const [newTask, setNewTask] = useState('');
   const [newGoal, setNewGoal] = useState('');
   const [newHabit, setNewHabit] = useState('');
+  const [newHabitTarget, setNewHabitTarget] = useState(7);
   const [newTaskForDay, setNewTaskForDay] = useState<{[key: string]: string}>({});
   const [newFutureTask, setNewFutureTask] = useState('');
   const [loading, setLoading] = useState(true);
@@ -502,13 +504,14 @@ export default function PlannerHabitTracker() {
         const response = await fetch('/api/habits', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: newHabit }),
+          body: JSON.stringify({ name: newHabit, target: newHabitTarget }),
         });
         
         if (response.ok) {
           const data = await response.json();
           setHabits(prev => [...prev, data.habit]);
           setNewHabit('');
+          setNewHabitTarget(7);
         }
       } catch (error) {
         console.error('Failed to create habit:', error);
@@ -1032,6 +1035,20 @@ export default function PlannerHabitTracker() {
                 className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
                 onKeyPress={(e) => e.key === 'Enter' && addHabit()}
               />
+              <select
+                value={newHabitTarget}
+                onChange={(e) => setNewHabitTarget(parseInt(e.target.value))}
+                className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
+                title="Weekly target"
+              >
+                <option value={1}>1x/week</option>
+                <option value={2}>2x/week</option>
+                <option value={3}>3x/week</option>
+                <option value={4}>4x/week</option>
+                <option value={5}>5x/week</option>
+                <option value={6}>6x/week</option>
+                <option value={7}>Daily</option>
+              </select>
               <button
                 onClick={addHabit}
                 className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors"
@@ -1044,18 +1061,32 @@ export default function PlannerHabitTracker() {
               {habits.map(habit => (
                 <div key={habit.id} className="border border-gray-200 rounded-lg p-3">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="font-medium text-gray-700">{habit.name}</span>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-purple-600 font-medium">
-                        {getHabitStreakForWeek(habit.id)}/7
-                      </span>
-                      <button
-                        onClick={() => deleteHabit(habit.id)}
-                        className="text-red-500 hover:text-red-700 transition-colors"
-                      >
-                        <X size={14} />
-                      </button>
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-medium text-gray-700">{habit.name}</span>
+                        <span className="text-sm text-purple-600 font-medium">
+                          {getHabitStreakForWeek(habit.id)}/{habit.target}
+                        </span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div 
+                          className={`h-2 rounded-full transition-all ${
+                            getHabitStreakForWeek(habit.id) >= habit.target 
+                              ? 'bg-green-500' 
+                              : 'bg-purple-500'
+                          }`}
+                          style={{ 
+                            width: `${Math.min(100, (getHabitStreakForWeek(habit.id) / habit.target) * 100)}%` 
+                          }}
+                        ></div>
+                      </div>
                     </div>
+                    <button
+                      onClick={() => deleteHabit(habit.id)}
+                      className="text-red-500 hover:text-red-700 transition-colors ml-2"
+                    >
+                      <X size={14} />
+                    </button>
                   </div>
                   <div className="grid grid-cols-7 gap-1">
                     {days.map(day => (

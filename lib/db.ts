@@ -45,20 +45,56 @@ export async function getUserByEmail(email: string) {
 }
 
 export async function getUserHabits(userId: number) {
-  const result = await query(
-    'SELECT id, name FROM habits WHERE user_id = $1 AND is_active = true ORDER BY created_at',
-    [userId]
-  );
-  return result.rows;
+  // Try with target column first, fallback if it doesn't exist
+  try {
+    const result = await query(
+      'SELECT id, name, target FROM habits WHERE user_id = $1 AND is_active = true ORDER BY created_at',
+      [userId]
+    );
+    return result.rows;
+  } catch (error: any) {
+    // If target column doesn't exist, use default of 7
+    if (error.message && error.message.includes('target')) {
+      console.log('target column not found in habits, using fallback');
+      const result = await query(
+        'SELECT id, name FROM habits WHERE user_id = $1 AND is_active = true ORDER BY created_at',
+        [userId]
+      );
+      return result.rows.map(row => ({
+        ...row,
+        target: 7
+      }));
+    }
+    throw error;
+  }
 }
 
-export async function createHabit(userId: number, name: string) {
+export async function createHabit(userId: number, name: string, target: number = 7) {
   const sanitizedName = name.trim().substring(0, 100);
-  const result = await query(
-    'INSERT INTO habits (user_id, name) VALUES ($1, $2) RETURNING id, name',
-    [userId, sanitizedName]
-  );
-  return result.rows[0];
+  const sanitizedTarget = Math.max(1, Math.min(7, target)); // Ensure target is between 1-7
+  
+  // Try with target column first, fallback if it doesn't exist
+  try {
+    const result = await query(
+      'INSERT INTO habits (user_id, name, target) VALUES ($1, $2, $3) RETURNING id, name, target',
+      [userId, sanitizedName, sanitizedTarget]
+    );
+    return result.rows[0];
+  } catch (error: any) {
+    // If target column doesn't exist, create without it
+    if (error.message && error.message.includes('target')) {
+      console.log('target column not found in createHabit, using fallback');
+      const result = await query(
+        'INSERT INTO habits (user_id, name) VALUES ($1, $2) RETURNING id, name',
+        [userId, sanitizedName]
+      );
+      return {
+        ...result.rows[0],
+        target: 7
+      };
+    }
+    throw error;
+  }
 }
 
 export async function deleteHabit(userId: number, habitId: number) {
@@ -156,6 +192,17 @@ export async function ensureFutureTasksColumn() {
   } catch (error: any) {
     // Ignore errors if column already exists or other permission issues
     console.log('Could not add future_tasks column (this is OK):', error.message);
+  }
+}
+
+// Try to add target column to habits if it doesn't exist (safe migration)
+export async function ensureHabitTargetColumn() {
+  try {
+    await query('ALTER TABLE habits ADD COLUMN IF NOT EXISTS target INTEGER DEFAULT 7');
+    console.log('habits target column ensured');
+  } catch (error: any) {
+    // Ignore errors if column already exists or other permission issues
+    console.log('Could not add habits target column (this is OK):', error.message);
   }
 }
 

@@ -4,6 +4,14 @@ import React, { useState, useEffect } from 'react';
 import { BarChart, Calendar, Target, Repeat, ArrowLeft, TrendingUp, CheckCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
+// Helper function to get Monday of current week
+const getMondayOfWeek = (date: Date) => {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1); // adjust when day is Sunday
+  return new Date(d.setDate(diff));
+};
+
 interface HabitStats {
   name: string;
   totalDays: number;
@@ -29,6 +37,9 @@ export default function StatsPage() {
   const [allWeeksData, setAllWeeksData] = useState<any>({});
   const [habitStats, setHabitStats] = useState<HabitStats[]>([]);
   const [weeklyStats, setWeeklyStats] = useState<WeekStats[]>([]);
+  const [currentWeekDate, setCurrentWeekDate] = useState(() => getMondayOfWeek(new Date()));
+  const [showWeekSelection, setShowWeekSelection] = useState(false);
+  const [viewMode, setViewMode] = useState<'all' | 'week'>('all');
   const [overallStats, setOverallStats] = useState({
     totalTasks: 0,
     completedTasks: 0,
@@ -39,6 +50,25 @@ export default function StatsPage() {
 
   const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
+  const getCurrentWeekKey = () => {
+    const month = currentWeekDate.getMonth() + 1;
+    const day = currentWeekDate.getDate();
+    const year = currentWeekDate.getFullYear();
+    return `${month}/${day}/${year}`;
+  };
+
+  const getCurrentWeekDisplay = () => {
+    const month = currentWeekDate.getMonth() + 1;
+    const day = currentWeekDate.getDate();
+    return `${month}/${day} Week`;
+  };
+
+  const navigateWeek = (direction: number) => {
+    const newDate = new Date(currentWeekDate);
+    newDate.setDate(newDate.getDate() + (direction * 7));
+    setCurrentWeekDate(getMondayOfWeek(newDate));
+  };
+
   useEffect(() => {
     loadData();
   }, []);
@@ -47,7 +77,7 @@ export default function StatsPage() {
     if (habits.length > 0 && Object.keys(allWeeksData).length > 0) {
       calculateStats();
     }
-  }, [habits, allWeeksData]);
+  }, [habits, allWeeksData, viewMode, currentWeekDate]);
 
   const loadData = async () => {
     try {
@@ -72,6 +102,14 @@ export default function StatsPage() {
   };
 
   const calculateStats = () => {
+    if (viewMode === 'week') {
+      calculateWeekStats();
+    } else {
+      calculateAllTimeStats();
+    }
+  };
+
+  const calculateAllTimeStats = () => {
     const weeks = Object.keys(allWeeksData);
     let totalTasks = 0;
     let completedTasks = 0;
@@ -160,6 +198,87 @@ export default function StatsPage() {
     });
   };
 
+  const calculateWeekStats = () => {
+    const currentWeekKey = getCurrentWeekKey();
+    const weekData = allWeeksData[currentWeekKey];
+    
+    if (!weekData) {
+      // No data for this week, show empty stats
+      setWeeklyStats([]);
+      setHabitStats([]);
+      setOverallStats({
+        totalTasks: 0,
+        completedTasks: 0,
+        totalGoals: 0,
+        completedGoals: 0,
+        averageHabitCompletion: 0
+      });
+      return;
+    }
+
+    const dailyTasks = weekData.dailyTasks || {};
+    const weeklyGoals = weekData.weeklyGoals || [];
+    const habitCompletions = weekData.habitCompletions || {};
+
+    // Count tasks for this week
+    let totalTasks = 0;
+    let completedTasks = 0;
+    Object.values(dailyTasks).forEach((dayTasks: any) => {
+      totalTasks += dayTasks.length;
+      completedTasks += dayTasks.filter((task: any) => task.completed).length;
+    });
+
+    // Count goals for this week
+    const totalGoals = weeklyGoals.length;
+    const completedGoals = weeklyGoals.filter((goal: any) => goal.completed).length;
+
+    // Calculate habit stats for this week
+    const habitStatsArray: HabitStats[] = habits.map(habit => {
+      let completedDays = 0;
+      days.forEach(day => {
+        if (habitCompletions[habit.id]?.[day]) {
+          completedDays++;
+        }
+      });
+      
+      return {
+        name: habit.name,
+        totalDays: 7,
+        completedDays,
+        completionRate: (completedDays / 7) * 100,
+        streak: completedDays >= 5 ? 1 : 0 // Simple streak logic for single week
+      };
+    });
+
+    const averageHabitCompletion = habitStatsArray.length > 0 
+      ? habitStatsArray.reduce((sum, habit) => sum + habit.completionRate, 0) / habitStatsArray.length 
+      : 0;
+
+    // Create single week stats
+    const weekStats: WeekStats[] = [{
+      weekKey: currentWeekKey,
+      weekDisplay: getCurrentWeekDisplay(),
+      totalTasks,
+      completedTasks,
+      totalGoals,
+      completedGoals,
+      habitCompletions: habits.reduce((acc, habit) => {
+        acc[habit.id] = days.filter(day => habitCompletions[habit.id]?.[day]).length;
+        return acc;
+      }, {} as { [habitId: number]: number })
+    }];
+
+    setWeeklyStats(weekStats);
+    setHabitStats(habitStatsArray);
+    setOverallStats({
+      totalTasks,
+      completedTasks,
+      totalGoals,
+      completedGoals,
+      averageHabitCompletion
+    });
+  };
+
   const calculateCurrentStreak = (habitId: number): number => {
     // This is a simplified streak calculation
     // In a real app, you'd want to calculate based on consecutive days
@@ -211,10 +330,42 @@ export default function StatsPage() {
             >
               <ArrowLeft size={20} />
             </button>
-            <h1 className="text-3xl font-bold text-gray-800 flex items-center gap-2">
-              <BarChart className="text-blue-600" />
-              Your Stats
-            </h1>
+            <div className="flex items-center gap-3">
+              <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 flex items-center gap-2">
+                <BarChart className="text-blue-600" />
+                Your Stats
+              </h1>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => navigateWeek(-1)}
+                  className="px-2 sm:px-3 py-1 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition-colors text-sm sm:text-lg"
+                >
+                  ←
+                </button>
+                <div className="flex items-center gap-2">
+                  <Calendar className="text-blue-600" size={20} />
+                  <span className="text-sm sm:text-lg font-medium">{getCurrentWeekDisplay()}</span>
+                </div>
+                <button
+                  onClick={() => navigateWeek(1)}
+                  className="px-2 sm:px-3 py-1 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition-colors text-sm sm:text-lg"
+                >
+                  →
+                </button>
+              </div>
+              <div className="flex items-center gap-2 ml-4">
+                <button
+                  onClick={() => setViewMode(viewMode === 'all' ? 'week' : 'all')}
+                  className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
+                    viewMode === 'all' 
+                      ? 'bg-blue-600 text-white' 
+                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  }`}
+                >
+                  {viewMode === 'all' ? 'All Time' : 'This Week'}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
         <p className="text-gray-600">Track your progress and see how you're doing! 📊</p>

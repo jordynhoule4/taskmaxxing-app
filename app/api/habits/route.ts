@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getUserHabits, createHabit, deleteHabit } from '@/lib/db';
+import { getUserHabits, createHabit, deleteHabit, ensureHabitTargetColumn } from '@/lib/db';
 import { getUserFromRequest } from '@/lib/auth';
 
 export async function GET(request: NextRequest) {
   try {
+    // Try to ensure the target column exists
+    await ensureHabitTargetColumn();
+    
     const user = await getUserFromRequest(request);
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -20,17 +23,21 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    // Try to ensure the target column exists
+    await ensureHabitTargetColumn();
+    
     const user = await getUserFromRequest(request);
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { name } = await request.json();
+    const { name, target } = await request.json();
     if (!name || name.trim().length === 0) {
       return NextResponse.json({ error: 'Habit name is required' }, { status: 400 });
     }
 
-    const habit = await createHabit(user.userId as number, name.trim());
+    const habitTarget = target && typeof target === 'number' ? target : 7;
+    const habit = await createHabit(user.userId as number, name.trim(), habitTarget);
     return NextResponse.json({ habit }, { status: 201 });
 
   } catch (error) {
