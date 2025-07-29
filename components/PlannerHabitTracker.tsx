@@ -18,6 +18,7 @@ export default function PlannerHabitTracker() {
   const [newGoal, setNewGoal] = useState('');
   const [newHabit, setNewHabit] = useState('');
   const [newTaskForDay, setNewTaskForDay] = useState<{[key: string]: string}>({});
+  const [newFutureTask, setNewFutureTask] = useState('');
   const [loading, setLoading] = useState(true);
   const [draggedTask, setDraggedTask] = useState<{task: any, fromDay: string} | null>(null);
   const [selectedTaskForMove, setSelectedTaskForMove] = useState<{task: any, fromDay: string} | null>(null);
@@ -43,10 +44,11 @@ export default function PlannerHabitTracker() {
     dailyTasks: {},
     weeklyGoals: [],
     habitCompletions: {},
-    weekLocked: false
+    weekLocked: false,
+    futureTasks: []
   };
 
-  const { dailyTasks, weeklyGoals, weekLocked, habitCompletions } = currentWeekData;
+  const { dailyTasks, weeklyGoals, weekLocked, habitCompletions, futureTasks } = currentWeekData;
 
   useEffect(() => {
     loadInitialData();
@@ -170,34 +172,51 @@ export default function PlannerHabitTracker() {
       return;
     }
 
-    // Determine completion status based on original day vs current day
-    const originalDayIndex = days.indexOf(task.originalDay);
-    const completedDayIndex = days.indexOf(toDay);
-    let completionStatus = null;
-    
-    if (completedDayIndex < originalDayIndex) {
-      completionStatus = 'early'; // blue
-    } else if (completedDayIndex > originalDayIndex) {
-      completionStatus = 'late'; // yellow
+    if (fromDay === 'future') {
+      // Moving from future tasks to a specific day
+      const updatedFutureTasks = (futureTasks || []).filter((t: any) => t.id !== task.id);
+      const updatedToTasks = [...(dailyTasks[toDay] || []), { 
+        ...task, 
+        originalDay: toDay,
+        completed: false,
+        completionStatus: null
+      }];
+
+      updateCurrentWeekData({ 
+        futureTasks: updatedFutureTasks,
+        dailyTasks: {
+          ...dailyTasks,
+          [toDay]: updatedToTasks
+        }
+      });
+    } else {
+      // Regular day-to-day move
+      const originalDayIndex = days.indexOf(task.originalDay);
+      const completedDayIndex = days.indexOf(toDay);
+      let completionStatus = null;
+      
+      if (completedDayIndex < originalDayIndex) {
+        completionStatus = 'early';
+      } else if (completedDayIndex > originalDayIndex) {
+        completionStatus = 'late';
+      }
+
+      const updatedFromTasks = dailyTasks[fromDay]?.filter((t: any) => t.id !== task.id) || [];
+      const updatedToTasks = [...(dailyTasks[toDay] || []), { 
+        ...task, 
+        completed: true,
+        completionStatus 
+      }];
+
+      const updatedTasks = {
+        ...dailyTasks,
+        [fromDay]: updatedFromTasks,
+        [toDay]: updatedToTasks
+      };
+
+      updateCurrentWeekData({ dailyTasks: updatedTasks });
     }
-
-    // Remove from original day
-    const updatedFromTasks = dailyTasks[fromDay]?.filter((t: any) => t.id !== task.id) || [];
     
-    // Add to new day with updated status
-    const updatedToTasks = [...(dailyTasks[toDay] || []), { 
-      ...task, 
-      completed: true,
-      completionStatus 
-    }];
-
-    const updatedTasks = {
-      ...dailyTasks,
-      [fromDay]: updatedFromTasks,
-      [toDay]: updatedToTasks
-    };
-
-    updateCurrentWeekData({ dailyTasks: updatedTasks });
     setDraggedTask(null);
   };
 
@@ -229,31 +248,51 @@ export default function PlannerHabitTracker() {
       return;
     }
 
-    // Same logic as drag and drop
-    const originalDayIndex = days.indexOf(task.originalDay);
-    const completedDayIndex = days.indexOf(toDay);
-    let completionStatus = null;
-    
-    if (completedDayIndex < originalDayIndex) {
-      completionStatus = 'early';
-    } else if (completedDayIndex > originalDayIndex) {
-      completionStatus = 'late';
+    if (fromDay === 'future') {
+      // Moving from future tasks to a specific day
+      const updatedFutureTasks = (futureTasks || []).filter((t: any) => t.id !== task.id);
+      const updatedToTasks = [...(dailyTasks[toDay] || []), { 
+        ...task, 
+        originalDay: toDay,
+        completed: false,
+        completionStatus: null
+      }];
+
+      updateCurrentWeekData({ 
+        futureTasks: updatedFutureTasks,
+        dailyTasks: {
+          ...dailyTasks,
+          [toDay]: updatedToTasks
+        }
+      });
+    } else {
+      // Regular day-to-day move
+      const originalDayIndex = days.indexOf(task.originalDay);
+      const completedDayIndex = days.indexOf(toDay);
+      let completionStatus = null;
+      
+      if (completedDayIndex < originalDayIndex) {
+        completionStatus = 'early';
+      } else if (completedDayIndex > originalDayIndex) {
+        completionStatus = 'late';
+      }
+
+      const updatedFromTasks = dailyTasks[fromDay]?.filter((t: any) => t.id !== task.id) || [];
+      const updatedToTasks = [...(dailyTasks[toDay] || []), { 
+        ...task, 
+        completed: true,
+        completionStatus 
+      }];
+
+      const updatedTasks = {
+        ...dailyTasks,
+        [fromDay]: updatedFromTasks,
+        [toDay]: updatedToTasks
+      };
+
+      updateCurrentWeekData({ dailyTasks: updatedTasks });
     }
-
-    const updatedFromTasks = dailyTasks[fromDay]?.filter((t: any) => t.id !== task.id) || [];
-    const updatedToTasks = [...(dailyTasks[toDay] || []), { 
-      ...task, 
-      completed: true,
-      completionStatus 
-    }];
-
-    const updatedTasks = {
-      ...dailyTasks,
-      [fromDay]: updatedFromTasks,
-      [toDay]: updatedToTasks
-    };
-
-    updateCurrentWeekData({ dailyTasks: updatedTasks });
+    
     setSelectedTaskForMove(null);
   };
 
@@ -286,6 +325,38 @@ export default function PlannerHabitTracker() {
 
   const cancelDuplication = () => {
     setTaskToDuplicate(null);
+  };
+
+  const addFutureTask = () => {
+    if (newFutureTask.trim()) {
+      const updatedFutureTasks = [...(futureTasks || []), {
+        id: Date.now(),
+        text: newFutureTask,
+        completed: false,
+        originalDay: null,
+        completionStatus: null
+      }];
+      updateCurrentWeekData({ futureTasks: updatedFutureTasks });
+      setNewFutureTask('');
+    }
+  };
+
+  const deleteFutureTask = (taskId: number) => {
+    const updatedFutureTasks = (futureTasks || []).filter((task: any) => task.id !== taskId);
+    updateCurrentWeekData({ futureTasks: updatedFutureTasks });
+  };
+
+  const handleFutureTaskDragStart = (e: React.DragEvent, task: any) => {
+    setDraggedTask({ task, fromDay: 'future' });
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleFutureTaskTap = (task: any) => {
+    if (selectedTaskForMove && selectedTaskForMove.task.id === task.id) {
+      setSelectedTaskForMove(null);
+    } else {
+      setSelectedTaskForMove({ task, fromDay: 'future' });
+    }
   };
 
   const toggleTask = (day: string, taskId: number) => {
@@ -479,7 +550,9 @@ export default function PlannerHabitTracker() {
                     <h3 className="font-semibold text-gray-700">
                       {day}:
                       {selectedTaskForMove && selectedTaskForMove.fromDay !== day && (
-                        <span className="ml-2 text-xs text-blue-600">(Tap to move here)</span>
+                        <span className="ml-2 text-xs text-blue-600">
+                          {selectedTaskForMove.fromDay === 'future' ? '(Tap to schedule here)' : '(Tap to move here)'}
+                        </span>
                       )}
                       {taskToDuplicate && (
                         <span className="ml-2 text-xs text-green-600">(Tap to duplicate here)</span>
@@ -578,6 +651,66 @@ export default function PlannerHabitTracker() {
         </div>
 
         <div className="space-y-6">
+          {/* Future Tasks Repository */}
+          <div className="bg-white rounded-lg shadow-lg p-6">
+            <h2 className="text-xl font-semibold text-gray-800 mb-4 flex items-center gap-2">
+              <Calendar className="text-indigo-600" />
+              Future Tasks
+            </h2>
+            
+            <div className="mb-4 flex gap-2">
+              <input
+                type="text"
+                value={newFutureTask}
+                onChange={(e) => setNewFutureTask(e.target.value)}
+                placeholder="Add future task"
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                onKeyPress={(e) => e.key === 'Enter' && addFutureTask()}
+              />
+              <button
+                onClick={addFutureTask}
+                className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors"
+              >
+                <Plus size={20} />
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              {(futureTasks || []).map((task: any) => (
+                <div 
+                  key={task.id} 
+                  className={`flex items-center gap-2 p-3 rounded border cursor-move hover:shadow-sm ${
+                    selectedTaskForMove && selectedTaskForMove.task.id === task.id
+                      ? 'ring-2 ring-blue-400 bg-blue-100 border-blue-200'
+                      : 'border-gray-200 bg-gray-50'
+                  }`}
+                  draggable
+                  onDragStart={(e) => handleFutureTaskDragStart(e, task)}
+                  onClick={() => handleFutureTaskTap(task)}
+                >
+                  <Move className="text-gray-400" size={16} />
+                  <span className="flex-1 text-gray-700">
+                    {task.text}
+                    <span className="ml-2 text-xs text-indigo-600">(Drag to schedule)</span>
+                  </span>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      deleteFutureTask(task.id);
+                    }}
+                    className="text-red-500 hover:text-red-700 transition-colors"
+                    title="Delete future task"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              ))}
+              {(!futureTasks || futureTasks.length === 0) && (
+                <p className="text-gray-400 italic">No future tasks planned</p>
+              )}
+            </div>
+          </div>
+
           <div className="bg-white rounded-lg shadow-lg p-6">
             <h2 className="text-xl font-semibold text-gray-800 mb-4 flex items-center gap-2">
               <Repeat className="text-purple-600" />
@@ -701,6 +834,7 @@ export default function PlannerHabitTracker() {
         <div className="space-y-2 text-sm text-gray-600">
           <p>• Click the <Plus className="inline w-4 h-4 mx-1" /> button next to each day to add tasks directly to that day</p>
           <div className="space-y-1">
+            <p>• <strong>Future Tasks:</strong> Add tasks to the Future Tasks repository and drag them to specific days when ready to schedule</p>
             <p>• <strong>Desktop:</strong> Drag and drop incomplete tasks between days to reschedule them</p>
             <p>• <strong>Mobile:</strong> Tap a task (with <Move className="inline w-3 h-3 mx-1" /> icon) to select it, then tap the day you want to move it to</p>
             <p>• <strong>Duplicate:</strong> Click the <Copy className="inline w-3 h-3 mx-1" /> button to copy a task, then tap any day to create a duplicate there</p>
