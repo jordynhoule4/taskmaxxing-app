@@ -1,79 +1,43 @@
-import sqlite3 from 'sqlite3';
-import { open } from 'sqlite';
-import path from 'path';
+import { Pool } from 'pg';
 
-let db: any = null;
+let pool: Pool;
 
-async function getDb() {
-  if (!db) {
-    db = await open({
-      filename: path.join(process.cwd(), 'database.sqlite'),
-      driver: sqlite3.Database
-    });
-    
-    await db.exec(`
-      CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        email TEXT UNIQUE NOT NULL,
-        password_hash TEXT NOT NULL,
-        name TEXT NOT NULL,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      );
-
-      CREATE TABLE IF NOT EXISTS habits (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-        name TEXT NOT NULL,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        is_active BOOLEAN DEFAULT true
-      );
-
-      CREATE TABLE IF NOT EXISTS week_data (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-        week_key TEXT NOT NULL,
-        daily_tasks TEXT DEFAULT '{}',
-        weekly_goals TEXT DEFAULT '[]',
-        habit_completions TEXT DEFAULT '{}',
-        week_locked BOOLEAN DEFAULT false,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE(user_id, week_key)
-      );
-    `);
-  }
-  return db;
+if (!pool) {
+  pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+    max: 10,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 2000,
+  });
 }
 
+export { pool };
+
 export async function query(text: string, params?: any[]) {
-  const database = await getDb();
+  const client = await pool.connect();
   try {
-    if (text.trim().toUpperCase().startsWith('SELECT')) {
-      const rows = await database.all(text, params);
-      return { rows };
-    } else {
-      const result = await database.run(text, params);
-      return { rows: [{ id: result.lastID }] };
-    }
+    const result = await client.query(text, params);
+    return result;
   } catch (error) {
     console.error('Database query error:', error);
     throw error;
+  } finally {
+    client.release();
   }
 }
 
 export async function createUser(email: string, passwordHash: string, name: string) {
-  const database = await getDb();
-  const result = await database.run(
-    'INSERT INTO users (email, password_hash, name) VALUES (?, ?, ?)',
+  const result = await query(
+    'INSERT INTO users (email, password_hash, name) VALUES ($1, $2, $3) RETURNING id, email, name',
     [email, passwordHash, name]
   );
-  return { id: result.lastID, email, name };
+  return result.rows[0];
 }
 
 export async function getUserByEmail(email: string) {
   const result = await query(
-    'SELECT id, email, password_hash, name FROM users WHERE email = ?',
+    'SELECT id, email, password_hash, name FROM users WHERE email = $1',
     [email]
   );
   return result.rows[0];
@@ -81,7 +45,7 @@ export async function getUserByEmail(email: string) {
 
 export async function getUserHabits(userId: number) {
   const result = await query(
-    'SELECT id, name FROM habits WHERE user_id = ? AND is_active = true ORDER BY created_at',
+    'SELECT id, name FROM habits WHERE user_id = $1 AND is_active = true ORDER BY created_at',
     [userId]
   );
   return result.rows;
@@ -89,41 +53,30 @@ export async function getUserHabits(userId: number) {
 
 export async function createHabit(userId: number, name: string) {
   const sanitizedName = name.trim().substring(0, 100);
-  const database = await getDb();
-  
-  console.log('Creating habit:', { userId, name: sanitizedName }); // Debug log
-  
-  const result = await database.run(
-    'INSERT INTO habits (user_id, name) VALUES (?, ?)',
+  const result = await query(
+    'INSERT INTO habits (user_id, name) VALUES ($1, $2) RETURNING id, name',
     [userId, sanitizedName]
   );
-  
-  console.log('Habit created with ID:', result.lastID); // Debug log
-  
-  return { id: result.lastID, name: sanitizedName };
+  return result.rows[0];
 }
 
 export async function deleteHabit(userId: number, habitId: number) {
   await query(
-    'UPDATE habits SET is_active = false WHERE id = ? AND user_id = ?',
+    'UPDATE habits SET is_active = false WHERE id = $1 AND user_id = $2',
     [habitId, userId]
   );
 }
 
 export async function getWeekData(userId: number, weekKey: string) {
+  const weekKeyPattern = /^\d{1,2}\/\d{1,2}\/\d{4}$/;
+  if (!weekKeyPattern.test(weekKey)) {
+    throw new Error('Invalid week key format');
+  }
+  
   const result = await query(
-    'SELECT daily_tasks, weekly_goals, habit_completions, week_locked FROM week_data WHERE user_id = ? AND week_key = ?',
+    'SELECT daily_tasks, weekly_goals, habit_completions, week_locked FROM week_data WHERE user_id = $1 AND week_key = $2',
     [userId, weekKey]
   );
-  
-  if (result.rows[0]) {
-    return {
-      daily_tasks: JSON.parse(result.rows[0].daily_tasks || '{}'),
-      weekly_goals: JSON.parse(result.rows[0].weekly_goals || '[]'),
-      habit_completions: JSON.parse(result.rows[0].habit_completions || '{}'),
-      week_locked: result.rows[0].week_locked
-    };
-  }
   return result.rows[0];
 }
 
@@ -135,25 +88,26 @@ export async function saveWeekData(
   habitCompletions: any, 
   weekLocked: boolean
 ) {
-  const database = await getDb();
-  await database.run(
-    `INSERT OR REPLACE INTO week_data (user_id, week_key, daily_tasks, weekly_goals, habit_completions, week_locked, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
-    [userId, weekKey, JSON.stringify(dailyTasks), JSON.stringify(weeklyGoals), JSON.stringify(habitCompletions), weekLocked ? 1 : 0]
+  const result = await query(
+    `INSERT INTO week_data (user_id, week_key, daily_tasks, weekly_goals, habit_completions, week_locked, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)
+     ON CONFLICT (user_id, week_key) 
+     DO UPDATE SET 
+       daily_tasks = EXCLUDED.daily_tasks,
+       weekly_goals = EXCLUDED.weekly_goals,
+       habit_completions = EXCLUDED.habit_completions,
+       week_locked = EXCLUDED.week_locked,
+       updated_at = CURRENT_TIMESTAMP
+     RETURNING *`,
+    [userId, weekKey, JSON.stringify(dailyTasks), JSON.stringify(weeklyGoals), JSON.stringify(habitCompletions), weekLocked]
   );
-  return {};
+  return result.rows[0];
 }
 
 export async function getAllWeeksData(userId: number) {
   const result = await query(
-    'SELECT week_key, daily_tasks, weekly_goals, habit_completions, week_locked FROM week_data WHERE user_id = ? ORDER BY week_key',
+    'SELECT week_key, daily_tasks, weekly_goals, habit_completions, week_locked FROM week_data WHERE user_id = $1 ORDER BY week_key',
     [userId]
   );
-  
-  return result.rows.map(row => ({
-    ...row,
-    daily_tasks: JSON.parse(row.daily_tasks || '{}'),
-    weekly_goals: JSON.parse(row.weekly_goals || '[]'),
-    habit_completions: JSON.parse(row.habit_completions || '{}')
-  }));
+  return result.rows;
 }
