@@ -549,6 +549,53 @@ export default function PlannerHabitTracker() {
     return completedDays.length;
   };
 
+  const calculateHabitStreak = (habitId: number): { current: number; best: number } => {
+    const sortedWeeks = Object.keys(allWeeksData).sort((a, b) => {
+      const dateA = new Date(a);
+      const dateB = new Date(b);
+      return dateA.getTime() - dateB.getTime();
+    });
+
+    let currentStreak = 0;
+    let bestStreak = 0;
+    let tempStreak = 0;
+    
+    // Find the habit to get target
+    const habit = habits.find(h => h.id === habitId);
+    const target = habit?.target || 7;
+
+    // Calculate streaks by going through weeks chronologically
+    for (const weekKey of sortedWeeks) {
+      const weekData = allWeeksData[weekKey];
+      const habitCompletions = weekData?.habitCompletions || {};
+      const weekCompletions = days.filter(day => habitCompletions[habitId]?.[day]).length;
+      
+      // If week meets target, increment streak
+      if (weekCompletions >= target) {
+        tempStreak++;
+        bestStreak = Math.max(bestStreak, tempStreak);
+      } else {
+        tempStreak = 0;
+      }
+    }
+
+    // Current streak is the streak up to the most recent week
+    const recentWeeks = sortedWeeks.slice(-10).reverse(); // Get last 10 weeks, most recent first
+    for (const weekKey of recentWeeks) {
+      const weekData = allWeeksData[weekKey];
+      const habitCompletions = weekData?.habitCompletions || {};
+      const weekCompletions = days.filter(day => habitCompletions[habitId]?.[day]).length;
+      
+      if (weekCompletions >= target) {
+        currentStreak++;
+      } else {
+        break;
+      }
+    }
+
+    return { current: currentStreak, best: bestStreak };
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -1026,7 +1073,7 @@ export default function PlannerHabitTracker() {
               Daily Habits
             </h2>
             
-            <div className="mb-4 flex gap-2">
+            <div className="mb-4 flex flex-col sm:flex-row gap-2">
               <input
                 type="text"
                 value={newHabit}
@@ -1035,40 +1082,48 @@ export default function PlannerHabitTracker() {
                 className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
                 onKeyPress={(e) => e.key === 'Enter' && addHabit()}
               />
-              <select
-                value={newHabitTarget}
-                onChange={(e) => setNewHabitTarget(parseInt(e.target.value))}
-                className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
-                title="Weekly target"
-              >
-                <option value={1}>1x/week</option>
-                <option value={2}>2x/week</option>
-                <option value={3}>3x/week</option>
-                <option value={4}>4x/week</option>
-                <option value={5}>5x/week</option>
-                <option value={6}>6x/week</option>
-                <option value={7}>Daily</option>
-              </select>
-              <button
-                onClick={addHabit}
-                className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors"
-              >
-                <Plus size={20} />
-              </button>
+              <div className="flex gap-2">
+                <select
+                  value={newHabitTarget}
+                  onChange={(e) => setNewHabitTarget(parseInt(e.target.value))}
+                  className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
+                  title="Weekly target"
+                >
+                  <option value={1}>1x/week</option>
+                  <option value={2}>2x/week</option>
+                  <option value={3}>3x/week</option>
+                  <option value={4}>4x/week</option>
+                  <option value={5}>5x/week</option>
+                  <option value={6}>6x/week</option>
+                  <option value={7}>Daily</option>
+                </select>
+                <button
+                  onClick={addHabit}
+                  className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors"
+                >
+                  <Plus size={20} />
+                </button>
+              </div>
             </div>
 
             <div className="space-y-4">
               {habits.map(habit => (
                 <div key={habit.id} className="border border-gray-200 rounded-lg p-3">
-                  <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center justify-between mb-3">
                     <div className="flex-1">
                       <div className="flex items-center justify-between mb-1">
                         <span className="font-medium text-gray-700">{habit.name}</span>
-                        <span className="text-sm text-purple-600 font-medium">
-                          {getHabitStreakForWeek(habit.id)}/{habit.target}
-                        </span>
+                        <div className="flex items-center gap-3 text-sm">
+                          <span className="text-purple-600 font-medium">
+                            {getHabitStreakForWeek(habit.id)}/{habit.target}
+                          </span>
+                          <div className="flex items-center gap-1 text-xs text-gray-500">
+                            <span title="Current streak">🔥{calculateHabitStreak(habit.id).current}</span>
+                            <span title="Best streak">🏆{calculateHabitStreak(habit.id).best}</span>
+                          </div>
+                        </div>
                       </div>
-                      <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div className="w-full bg-gray-200 rounded-full h-2 mb-2">
                         <div 
                           className={`h-2 rounded-full transition-all ${
                             getHabitStreakForWeek(habit.id) >= habit.target 
@@ -1079,6 +1134,34 @@ export default function PlannerHabitTracker() {
                             width: `${Math.min(100, (getHabitStreakForWeek(habit.id) / habit.target) * 100)}%` 
                           }}
                         ></div>
+                      </div>
+                      {/* Daily progress bars */}
+                      <div className="flex gap-1">
+                        {days.map(day => {
+                          const isCompleted = habitCompletions[habit.id]?.[day];
+                          const dayIndex = days.indexOf(day);
+                          const today = new Date().getDay();
+                          const mondayBasedIndex = today === 0 ? 6 : today - 1; // Convert Sunday=0 to Monday=0 system
+                          const isPastDay = dayIndex < mondayBasedIndex;
+                          const isToday = dayIndex === mondayBasedIndex;
+                          
+                          return (
+                            <div key={day} className="flex-1 h-1 rounded-full bg-gray-200 relative">
+                              <div 
+                                className={`h-full rounded-full transition-all ${
+                                  isCompleted 
+                                    ? 'bg-green-500' 
+                                    : isPastDay 
+                                      ? 'bg-red-300' 
+                                      : isToday 
+                                        ? 'bg-yellow-400' 
+                                        : 'bg-gray-200'
+                                }`}
+                                style={{ width: '100%' }}
+                              />
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                     <button
