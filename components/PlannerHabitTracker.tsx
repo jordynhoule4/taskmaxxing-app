@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Check, Plus, X, Edit3, Calendar, Target, Repeat, LogOut, BarChart, Move } from 'lucide-react';
+import { Check, Plus, X, Edit3, Calendar, Target, Repeat, LogOut, BarChart, Move, Copy } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 interface Habit {
@@ -21,6 +21,7 @@ export default function PlannerHabitTracker() {
   const [loading, setLoading] = useState(true);
   const [draggedTask, setDraggedTask] = useState<{task: any, fromDay: string} | null>(null);
   const [selectedTaskForMove, setSelectedTaskForMove] = useState<{task: any, fromDay: string} | null>(null);
+  const [taskToDuplicate, setTaskToDuplicate] = useState<{task: any, fromDay: string} | null>(null);
 
   const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
@@ -256,6 +257,37 @@ export default function PlannerHabitTracker() {
     setSelectedTaskForMove(null);
   };
 
+  const handleDuplicateTask = (task: any, fromDay: string) => {
+    setTaskToDuplicate({ task, fromDay });
+  };
+
+  const duplicateTaskToDay = (toDay: string) => {
+    if (!taskToDuplicate) return;
+    
+    const { task } = taskToDuplicate;
+    
+    // Create a new task with a new ID but same text and original day
+    const duplicatedTask = {
+      id: Date.now(),
+      text: task.text,
+      completed: false,
+      originalDay: toDay,
+      completionStatus: null
+    };
+    
+    const updatedTasks = {
+      ...dailyTasks,
+      [toDay]: [...(dailyTasks[toDay] || []), duplicatedTask]
+    };
+    
+    updateCurrentWeekData({ dailyTasks: updatedTasks });
+    setTaskToDuplicate(null);
+  };
+
+  const cancelDuplication = () => {
+    setTaskToDuplicate(null);
+  };
+
   const toggleTask = (day: string, taskId: number) => {
     const updatedTasks = {
       ...dailyTasks,
@@ -397,7 +429,20 @@ export default function PlannerHabitTracker() {
           </div>
         </div>
         
-        <p className="text-gray-600">Take the task pill today! 💊</p>
+        <div className="flex items-center justify-between">
+          <p className="text-gray-600">Take the task pill today! 💊</p>
+          {taskToDuplicate && (
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-green-600">Duplicating: "{taskToDuplicate.task.text}" - Tap a day to copy</span>
+              <button
+                onClick={cancelDuplication}
+                className="px-3 py-1 bg-gray-500 text-white rounded text-sm hover:bg-gray-600 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -416,17 +461,28 @@ export default function PlannerHabitTracker() {
                   className={`border rounded-lg p-4 ${
                     selectedTaskForMove && selectedTaskForMove.fromDay !== day
                       ? 'border-blue-400 bg-blue-50 cursor-pointer'
+                      : taskToDuplicate
+                      ? 'border-green-400 bg-green-50 cursor-pointer'
                       : 'border-gray-200'
                   }`}
                   onDragOver={handleDragOver}
                   onDrop={(e) => handleDrop(e, day)}
-                  onClick={() => handleDayTapForMove(day)}
+                  onClick={() => {
+                    if (selectedTaskForMove) {
+                      handleDayTapForMove(day);
+                    } else if (taskToDuplicate) {
+                      duplicateTaskToDay(day);
+                    }
+                  }}
                 >
                   <div className="flex items-center justify-between mb-2">
                     <h3 className="font-semibold text-gray-700">
                       {day}:
                       {selectedTaskForMove && selectedTaskForMove.fromDay !== day && (
                         <span className="ml-2 text-xs text-blue-600">(Tap to move here)</span>
+                      )}
+                      {taskToDuplicate && (
+                        <span className="ml-2 text-xs text-green-600">(Tap to duplicate here)</span>
                       )}
                     </h3>
                     <div className="flex items-center gap-2">
@@ -487,12 +543,28 @@ export default function PlannerHabitTracker() {
                             <Move className="inline ml-2 text-gray-400" size={12} />
                           )}
                         </span>
-                        <button
-                          onClick={() => deleteTask(day, task.id)}
-                          className="text-red-500 hover:text-red-700 transition-colors"
-                        >
-                          <X size={16} />
-                        </button>
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDuplicateTask(task, day);
+                            }}
+                            className="text-green-500 hover:text-green-700 transition-colors"
+                            title="Duplicate task"
+                          >
+                            <Copy size={16} />
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              deleteTask(day, task.id);
+                            }}
+                            className="text-red-500 hover:text-red-700 transition-colors"
+                            title="Delete task"
+                          >
+                            <X size={16} />
+                          </button>
+                        </div>
                       </div>
                     ))}
                     {(!dailyTasks[day] || dailyTasks[day].length === 0) && (
@@ -631,6 +703,7 @@ export default function PlannerHabitTracker() {
           <div className="space-y-1">
             <p>• <strong>Desktop:</strong> Drag and drop incomplete tasks between days to reschedule them</p>
             <p>• <strong>Mobile:</strong> Tap a task (with <Move className="inline w-3 h-3 mx-1" /> icon) to select it, then tap the day you want to move it to</p>
+            <p>• <strong>Duplicate:</strong> Click the <Copy className="inline w-3 h-3 mx-1" /> button to copy a task, then tap any day to create a duplicate there</p>
           </div>
           <p>• When you complete a task on a different day than planned:</p>
           <div className="ml-4 space-y-1">
