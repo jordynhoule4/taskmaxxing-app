@@ -311,38 +311,38 @@ export default function PlannerHabitTracker() {
   return (
     <div className="max-w-6xl mx-auto p-6 bg-gray-50 min-h-screen">
       <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
-        <div className="flex justify-between items-start mb-4">
-          <h1 className="text-3xl font-bold text-gray-800 flex items-center gap-2">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-4">
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 flex items-center gap-2">
             <button
               onClick={() => navigateWeek(-1)}
-              className="px-3 py-1 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition-colors text-lg"
+              className="px-2 sm:px-3 py-1 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition-colors text-sm sm:text-lg"
             >
               ←
             </button>
-            <Calendar className="text-blue-600" />
-            {getCurrentWeekDisplay()}
+            <Calendar className="text-blue-600" size={24} />
+            <span className="text-base sm:text-3xl">{getCurrentWeekDisplay()}</span>
             <button
               onClick={() => navigateWeek(1)}
-              className="px-3 py-1 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition-colors text-lg"
+              className="px-2 sm:px-3 py-1 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition-colors text-sm sm:text-lg"
             >
               →
             </button>
           </h1>
           
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 self-start sm:self-auto">
             <button
               onClick={() => router.push('/stats')}
-              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-sm flex items-center gap-2"
+              className="px-3 sm:px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-sm flex items-center gap-2"
             >
               <BarChart size={16} />
-              Stats
+              <span className="hidden sm:inline">Stats</span>
             </button>
             <button
               onClick={handleLogout}
-              className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors text-sm flex items-center gap-2"
+              className="px-3 sm:px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors text-sm flex items-center gap-2"
             >
               <LogOut size={16} />
-              Logout
+              <span className="hidden sm:inline">Logout</span>
             </button>
           </div>
         </div>
