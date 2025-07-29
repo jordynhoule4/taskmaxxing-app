@@ -55,14 +55,36 @@ export async function GET(request: NextRequest) {
       )
     `);
 
+    // Create financial_settings table if it doesn't exist
+    await db.exec(`
+      CREATE TABLE IF NOT EXISTS financial_settings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        monthly_income REAL NOT NULL DEFAULT 0,
+        rent REAL NOT NULL DEFAULT 0,
+        savings_goal REAL NOT NULL DEFAULT 0,
+        spending_limit REAL NOT NULL DEFAULT 2000,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users (id),
+        UNIQUE(user_id)
+      )
+    `);
+
     const finances = await db.all(
       'SELECT id, month, credit_card_bill as creditCardBill, notes FROM financial_data WHERE user_id = ? ORDER BY month DESC',
       [userId]
     );
 
+    // Get user's financial settings
+    const settings = await db.get(
+      'SELECT monthly_income as monthlyIncome, rent, savings_goal as savingsGoal, spending_limit as spendingLimit FROM financial_settings WHERE user_id = ?',
+      [userId]
+    );
+
     await db.close();
 
-    return NextResponse.json({ finances });
+    return NextResponse.json({ finances, settings });
   } catch (error) {
     console.error('Error fetching financial data:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
@@ -76,7 +98,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { month, creditCardBill, notes } = await request.json();
+    const { month, creditCardBill, notes, settings } = await request.json();
 
     if (!month || creditCardBill === undefined) {
       return NextResponse.json({ error: 'Month and credit card bill are required' }, { status: 400 });
@@ -89,7 +111,7 @@ export async function POST(request: NextRequest) {
 
     const db = await getDatabase();
     
-    // Create table if it doesn't exist
+    // Create tables if they don't exist
     await db.exec(`
       CREATE TABLE IF NOT EXISTS financial_data (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -103,6 +125,37 @@ export async function POST(request: NextRequest) {
         UNIQUE(user_id, month)
       )
     `);
+
+    await db.exec(`
+      CREATE TABLE IF NOT EXISTS financial_settings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        monthly_income REAL NOT NULL DEFAULT 0,
+        rent REAL NOT NULL DEFAULT 0,
+        savings_goal REAL NOT NULL DEFAULT 0,
+        spending_limit REAL NOT NULL DEFAULT 2000,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users (id),
+        UNIQUE(user_id)
+      )
+    `);
+
+    // Update financial settings if provided
+    if (settings) {
+      await db.run(
+        `INSERT INTO financial_settings (user_id, monthly_income, rent, savings_goal, spending_limit, updated_at)
+         VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+         ON CONFLICT(user_id) 
+         DO UPDATE SET 
+           monthly_income = excluded.monthly_income,
+           rent = excluded.rent,
+           savings_goal = excluded.savings_goal,
+           spending_limit = excluded.spending_limit,
+           updated_at = CURRENT_TIMESTAMP`,
+        [userId, settings.monthlyIncome || 0, settings.rent || 0, settings.savingsGoal || 0, settings.spendingLimit || 2000]
+      );
+    }
 
     // Insert or update financial data
     await db.run(
