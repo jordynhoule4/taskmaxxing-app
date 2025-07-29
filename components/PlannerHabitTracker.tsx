@@ -102,21 +102,35 @@ export default function PlannerHabitTracker() {
         const data = await response.json();
         let weekData = data.weekData;
         
-        // If this week doesn't have future tasks yet, carry them over from the most recent previous week
+        // Carry over future tasks from all previous weeks (they persist until manually transferred)
         if (!weekData.futureTasks || weekData.futureTasks.length === 0) {
-          const existingWeeks = Object.keys(allWeeksData).sort();
-          const currentWeekIndex = existingWeeks.indexOf(currentWeekKey);
+          // Collect all future tasks from all previous weeks
+          const allFutureTasks = new Map();
           
-          // Find the most recent previous week with future tasks
-          for (let i = currentWeekIndex - 1; i >= 0; i--) {
-            const prevWeekData = allWeeksData[existingWeeks[i]];
-            if (prevWeekData?.futureTasks && prevWeekData.futureTasks.length > 0) {
-              weekData = {
-                ...weekData,
-                futureTasks: [...prevWeekData.futureTasks] // Copy future tasks
-              };
-              break;
+          // Sort weeks chronologically
+          const sortedWeeks = Object.keys(allWeeksData).sort((a, b) => {
+            const dateA = new Date(a);
+            const dateB = new Date(b);
+            return dateA.getTime() - dateB.getTime();
+          });
+          
+          // Collect future tasks from all previous weeks
+          for (const weekKey of sortedWeeks) {
+            const weekData = allWeeksData[weekKey];
+            if (weekData?.futureTasks && weekData.futureTasks.length > 0) {
+              weekData.futureTasks.forEach((task: any) => {
+                // Use task text as key to avoid duplicates
+                allFutureTasks.set(task.text, task);
+              });
             }
+          }
+          
+          // If we found any future tasks, add them to current week
+          if (allFutureTasks.size > 0) {
+            weekData = {
+              ...weekData,
+              futureTasks: Array.from(allFutureTasks.values())
+            };
           }
         }
         
@@ -1101,16 +1115,16 @@ export default function PlannerHabitTracker() {
             </h2>
             
             <div className="mb-4">
-              <div className="flex flex-col sm:flex-row gap-2">
+              <div className="flex flex-col gap-2">
                 <input
                   type="text"
                   value={newHabit}
                   onChange={(e) => setNewHabit(e.target.value)}
                   placeholder="Add new habit"
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
                   onKeyPress={(e) => e.key === 'Enter' && addHabit()}
                 />
-                <div className="flex gap-2 sm:flex-shrink-0">
+                <div className="flex gap-2 justify-end">
                   <select
                     value={newHabitTarget}
                     onChange={(e) => setNewHabitTarget(parseInt(e.target.value))}
