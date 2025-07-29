@@ -345,7 +345,8 @@ export default function PlannerHabitTracker() {
         text: newFutureTask,
         completed: false,
         originalDay: null,
-        completionStatus: null
+        completionStatus: null,
+        notes: ''
       }];
       updateCurrentWeekData({ futureTasks: updatedFutureTasks });
       setNewFutureTask('');
@@ -431,6 +432,40 @@ export default function PlannerHabitTracker() {
   const cancelEditTask = () => {
     setEditingTask(null);
     setEditTaskText('');
+  };
+
+  const openTaskNotes = (day: string, task: any) => {
+    setTaskNotesOpen({ taskId: task.id, day });
+    setTaskNoteText(task.notes || '');
+  };
+
+  const saveTaskNotes = () => {
+    if (!taskNotesOpen) return;
+    
+    const { taskId, day } = taskNotesOpen;
+    
+    if (day === 'future') {
+      const updatedFutureTasks = (futureTasks || []).map((task: any) => 
+        task.id === taskId ? { ...task, notes: taskNoteText } : task
+      );
+      updateCurrentWeekData({ futureTasks: updatedFutureTasks });
+    } else {
+      const updatedTasks = {
+        ...dailyTasks,
+        [day]: dailyTasks[day].map((task: any) => 
+          task.id === taskId ? { ...task, notes: taskNoteText } : task
+        )
+      };
+      updateCurrentWeekData({ dailyTasks: updatedTasks });
+    }
+    
+    setTaskNotesOpen(null);
+    setTaskNoteText('');
+  };
+
+  const closeTaskNotes = () => {
+    setTaskNotesOpen(null);
+    setTaskNoteText('');
   };
 
   const addWeeklyGoal = () => {
@@ -577,7 +612,7 @@ export default function PlannerHabitTracker() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-2 space-y-6">
           <div className="bg-white rounded-lg shadow-lg p-6">
             <h2 className="text-xl font-semibold text-gray-800 mb-4 flex items-center gap-2">
               <Edit3 className="text-green-600" />
@@ -714,6 +749,20 @@ export default function PlannerHabitTracker() {
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
+                                openTaskNotes(day, task);
+                              }}
+                              className={`transition-colors ${
+                                task.notes && task.notes.trim() 
+                                  ? 'text-purple-600 hover:text-purple-800' 
+                                  : 'text-gray-400 hover:text-purple-600'
+                              }`}
+                              title="Task notes"
+                            >
+                              <MessageSquare size={16} />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
                                 startEditTask(day, task);
                               }}
                               className="text-blue-500 hover:text-blue-700 transition-colors"
@@ -751,6 +800,60 @@ export default function PlannerHabitTracker() {
                   </div>
                 </div>
               ))}
+            </div>
+          </div>
+          
+          {/* Weekly Goals */}
+          <div className="bg-white rounded-lg shadow-lg p-6">
+            <h2 className="text-xl font-semibold text-gray-800 mb-4 flex items-center gap-2">
+              <Target className="text-orange-600" />
+              Weekly Goals
+            </h2>
+            
+            <div className="mb-4 flex gap-2">
+              <input
+                type="text"
+                value={newGoal}
+                onChange={(e) => setNewGoal(e.target.value)}
+                placeholder="Add weekly goal"
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+                onKeyPress={(e) => e.key === 'Enter' && addWeeklyGoal()}
+              />
+              <button
+                onClick={addWeeklyGoal}
+                className="px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 transition-colors"
+              >
+                <Plus size={20} />
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              {weeklyGoals.map((goal: any) => (
+                <div key={goal.id} className="flex items-center gap-2">
+                  <button
+                    onClick={() => toggleWeeklyGoal(goal.id)}
+                    className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
+                      goal.completed
+                        ? 'bg-orange-500 border-orange-500 text-white'
+                        : 'border-gray-300 hover:border-orange-400'
+                    }`}
+                  >
+                    {goal.completed && <Check size={14} />}
+                  </button>
+                  <span className={`flex-1 ${goal.completed ? 'line-through text-gray-500' : 'text-gray-700'}`}>
+                    {goal.text}
+                  </span>
+                  <button
+                    onClick={() => deleteWeeklyGoal(goal.id)}
+                    className="text-red-500 hover:text-red-700 transition-colors"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              ))}
+              {weeklyGoals.length === 0 && (
+                <p className="text-gray-400 italic">No weekly goals set</p>
+              )}
             </div>
           </div>
         </div>
@@ -836,6 +939,20 @@ export default function PlannerHabitTracker() {
                         <span className="ml-2 text-xs text-indigo-600">(Drag to schedule)</span>
                       </span>
                       <div className="flex items-center gap-1">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openTaskNotes('future', task);
+                          }}
+                          className={`transition-colors ${
+                            task.notes && task.notes.trim() 
+                              ? 'text-purple-600 hover:text-purple-800' 
+                              : 'text-gray-400 hover:text-purple-600'
+                          }`}
+                          title="Task notes"
+                        >
+                          <MessageSquare size={16} />
+                        </button>
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -928,59 +1045,6 @@ export default function PlannerHabitTracker() {
               ))}
             </div>
           </div>
-
-          <div className="bg-white rounded-lg shadow-lg p-6">
-            <h2 className="text-xl font-semibold text-gray-800 mb-4 flex items-center gap-2">
-              <Target className="text-orange-600" />
-              Weekly Goals
-            </h2>
-            
-            <div className="mb-4 flex gap-2">
-              <input
-                type="text"
-                value={newGoal}
-                onChange={(e) => setNewGoal(e.target.value)}
-                placeholder="Add weekly goal"
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
-                onKeyPress={(e) => e.key === 'Enter' && addWeeklyGoal()}
-              />
-              <button
-                onClick={addWeeklyGoal}
-                className="px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 transition-colors"
-              >
-                <Plus size={20} />
-              </button>
-            </div>
-
-            <div className="space-y-2">
-              {weeklyGoals.map((goal: any) => (
-                <div key={goal.id} className="flex items-center gap-2">
-                  <button
-                    onClick={() => toggleWeeklyGoal(goal.id)}
-                    className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
-                      goal.completed
-                        ? 'bg-orange-500 border-orange-500 text-white'
-                        : 'border-gray-300 hover:border-orange-400'
-                    }`}
-                  >
-                    {goal.completed && <Check size={14} />}
-                  </button>
-                  <span className={`flex-1 ${goal.completed ? 'line-through text-gray-500' : 'text-gray-700'}`}>
-                    {goal.text}
-                  </span>
-                  <button
-                    onClick={() => deleteWeeklyGoal(goal.id)}
-                    className="text-red-500 hover:text-red-700 transition-colors"
-                  >
-                    <X size={16} />
-                  </button>
-                </div>
-              ))}
-              {weeklyGoals.length === 0 && (
-                <p className="text-gray-400 italic">No weekly goals set</p>
-              )}
-            </div>
-          </div>
         </div>
       </div>
       
@@ -991,6 +1055,7 @@ export default function PlannerHabitTracker() {
           <p>• Click the <Plus className="inline w-4 h-4 mx-1" /> button next to each day to add tasks directly to that day</p>
           <div className="space-y-1">
             <p>• <strong>Future Tasks:</strong> Add tasks to the Future Tasks repository and drag them to specific days when ready to schedule</p>
+            <p>• <strong>Task Notes:</strong> Click the <MessageSquare className="inline w-3 h-3 mx-1" /> button to add detailed notes about what a task entails</p>
             <p>• <strong>Edit Tasks:</strong> Click the <Edit3 className="inline w-3 h-3 mx-1" /> button to edit any task text inline</p>
             <p>• <strong>Desktop:</strong> Drag and drop incomplete tasks between days to reschedule them</p>
             <p>• <strong>Mobile:</strong> Tap a task (with <Move className="inline w-3 h-3 mx-1" /> icon) to select it, then tap the day you want to move it to</p>
@@ -1013,6 +1078,61 @@ export default function PlannerHabitTracker() {
           </div>
         </div>
       </div>
+      
+      {/* Task Notes Modal */}
+      {taskNotesOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[80vh] overflow-hidden">
+            <div className="flex items-center justify-between p-4 border-b">
+              <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                <MessageSquare className="text-purple-600" size={20} />
+                Task Notes
+              </h3>
+              <button
+                onClick={closeTaskNotes}
+                className="text-gray-500 hover:text-gray-700 transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="p-4">
+              <div className="mb-3">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Task: {taskNotesOpen.day === 'future' 
+                    ? (futureTasks || []).find((t: any) => t.id === taskNotesOpen.taskId)?.text
+                    : dailyTasks[taskNotesOpen.day]?.find((t: any) => t.id === taskNotesOpen.taskId)?.text
+                  }
+                </label>
+              </div>
+              
+              <textarea
+                value={taskNoteText}
+                onChange={(e) => setTaskNoteText(e.target.value)}
+                placeholder="Add detailed notes about this task..."
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 min-h-[200px] resize-vertical text-sm"
+                autoFocus
+              />
+            </div>
+            
+            <div className="flex justify-end gap-2 p-4 border-t bg-gray-50">
+              <button
+                onClick={closeTaskNotes}
+                className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={saveTaskNotes}
+                className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors flex items-center gap-2"
+              >
+                <Save size={16} />
+                Save Notes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
