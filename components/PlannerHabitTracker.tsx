@@ -31,6 +31,8 @@ export default function PlannerHabitTracker() {
   const [draggedTask, setDraggedTask] = useState<{task: any, fromDay: string} | null>(null);
   const [selectedTaskForMove, setSelectedTaskForMove] = useState<{task: any, fromDay: string} | null>(null);
   const [taskToDuplicate, setTaskToDuplicate] = useState<{task: any, fromDay: string} | null>(null);
+  const [editingTask, setEditingTask] = useState<{taskId: number, day: string} | null>(null);
+  const [editTaskText, setEditTaskText] = useState('');
 
   const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
@@ -355,6 +357,23 @@ export default function PlannerHabitTracker() {
     updateCurrentWeekData({ futureTasks: updatedFutureTasks });
   };
 
+  const startEditFutureTask = (task: any) => {
+    setEditingTask({ taskId: task.id, day: 'future' });
+    setEditTaskText(task.text);
+  };
+
+  const saveEditFutureTask = () => {
+    if (!editingTask || !editTaskText.trim()) return;
+    
+    const { taskId } = editingTask;
+    const updatedFutureTasks = (futureTasks || []).map((task: any) => 
+      task.id === taskId ? { ...task, text: editTaskText.trim() } : task
+    );
+    updateCurrentWeekData({ futureTasks: updatedFutureTasks });
+    setEditingTask(null);
+    setEditTaskText('');
+  };
+
   const handleFutureTaskDragStart = (e: React.DragEvent, task: any) => {
     setDraggedTask({ task, fromDay: 'future' });
     e.dataTransfer.effectAllowed = 'move';
@@ -387,6 +406,31 @@ export default function PlannerHabitTracker() {
       [day]: dailyTasks[day].filter((task: any) => task.id !== taskId)
     };
     updateCurrentWeekData({ dailyTasks: updatedTasks });
+  };
+
+  const startEditTask = (day: string, task: any) => {
+    setEditingTask({ taskId: task.id, day });
+    setEditTaskText(task.text);
+  };
+
+  const saveEditTask = () => {
+    if (!editingTask || !editTaskText.trim()) return;
+    
+    const { taskId, day } = editingTask;
+    const updatedTasks = {
+      ...dailyTasks,
+      [day]: dailyTasks[day].map((task: any) => 
+        task.id === taskId ? { ...task, text: editTaskText.trim() } : task
+      )
+    };
+    updateCurrentWeekData({ dailyTasks: updatedTasks });
+    setEditingTask(null);
+    setEditTaskText('');
+  };
+
+  const cancelEditTask = () => {
+    setEditingTask(null);
+    setEditTaskText('');
   };
 
   const addWeeklyGoal = () => {
@@ -602,13 +646,17 @@ export default function PlannerHabitTracker() {
                         } ${
                           selectedTaskForMove && selectedTaskForMove.task.id === task.id
                             ? 'ring-2 ring-blue-400 bg-blue-100'
+                            : editingTask && editingTask.taskId === task.id && editingTask.day === day
+                            ? 'ring-2 ring-green-400 bg-green-50'
                             : ''
                         }`}
-                        draggable={!task.completed}
+                        draggable={!task.completed && (!editingTask || editingTask.taskId !== task.id)}
                         onDragStart={(e) => handleDragStart(e, task, day)}
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleTaskTap(task, day);
+                          if (!editingTask) {
+                            handleTaskTap(task, day);
+                          }
                         }}
                       >
                         <button
@@ -621,39 +669,80 @@ export default function PlannerHabitTracker() {
                         >
                           {task.completed && <Check size={14} />}
                         </button>
-                        <span className={`flex-1 ${task.completed ? 'line-through' : ''}`}>
-                          {task.text}
-                          {task.completed && task.completionStatus && (
-                            <span className="ml-2 text-xs">
-                              {task.completionStatus === 'early' ? '(Early)' : task.completionStatus === 'late' ? '(Late)' : ''}
-                            </span>
-                          )}
-                          {!task.completed && (
-                            <Move className="inline ml-2 text-gray-400" size={12} />
-                          )}
-                        </span>
-                        <div className="flex items-center gap-1">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDuplicateTask(task, day);
-                            }}
-                            className="text-green-500 hover:text-green-700 transition-colors"
-                            title="Duplicate task"
-                          >
-                            <Copy size={16} />
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              deleteTask(day, task.id);
-                            }}
-                            className="text-red-500 hover:text-red-700 transition-colors"
-                            title="Delete task"
-                          >
-                            <X size={16} />
-                          </button>
-                        </div>
+                        {editingTask && editingTask.taskId === task.id && editingTask.day === day ? (
+                          <div className="flex-1 flex items-center gap-2">
+                            <input
+                              type="text"
+                              value={editTaskText}
+                              onChange={(e) => setEditTaskText(e.target.value)}
+                              className="flex-1 px-2 py-1 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
+                              onKeyPress={(e) => {
+                                if (e.key === 'Enter') saveEditTask();
+                                if (e.key === 'Escape') cancelEditTask();
+                              }}
+                              autoFocus
+                            />
+                            <button
+                              onClick={saveEditTask}
+                              disabled={!editTaskText.trim()}
+                              className="px-2 py-1 bg-green-600 text-white rounded text-xs hover:bg-green-700 transition-colors disabled:opacity-50"
+                            >
+                              Save
+                            </button>
+                            <button
+                              onClick={cancelEditTask}
+                              className="px-2 py-1 bg-gray-500 text-white rounded text-xs hover:bg-gray-600 transition-colors"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <span className={`flex-1 ${task.completed ? 'line-through' : ''}`}>
+                            {task.text}
+                            {task.completed && task.completionStatus && (
+                              <span className="ml-2 text-xs">
+                                {task.completionStatus === 'early' ? '(Early)' : task.completionStatus === 'late' ? '(Late)' : ''}
+                              </span>
+                            )}
+                            {!task.completed && (
+                              <Move className="inline ml-2 text-gray-400" size={12} />
+                            )}
+                          </span>
+                        )}
+                        {!(editingTask && editingTask.taskId === task.id && editingTask.day === day) && (
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                startEditTask(day, task);
+                              }}
+                              className="text-blue-500 hover:text-blue-700 transition-colors"
+                              title="Edit task"
+                            >
+                              <Edit3 size={16} />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDuplicateTask(task, day);
+                              }}
+                              className="text-green-500 hover:text-green-700 transition-colors"
+                              title="Duplicate task"
+                            >
+                              <Copy size={16} />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                deleteTask(day, task.id);
+                              }}
+                              className="text-red-500 hover:text-red-700 transition-colors"
+                              title="Delete task"
+                            >
+                              <X size={16} />
+                            </button>
+                          </div>
+                        )}
                       </div>
                     ))}
                     {(!dailyTasks[day] || dailyTasks[day].length === 0) && (
@@ -695,30 +784,81 @@ export default function PlannerHabitTracker() {
               {(futureTasks || []).map((task: any) => (
                 <div 
                   key={task.id} 
-                  className={`flex items-center gap-2 p-3 rounded border cursor-move hover:shadow-sm ${
+                  className={`flex items-center gap-2 p-3 rounded border hover:shadow-sm ${
                     selectedTaskForMove && selectedTaskForMove.task.id === task.id
                       ? 'ring-2 ring-blue-400 bg-blue-100 border-blue-200'
+                      : editingTask && editingTask.taskId === task.id && editingTask.day === 'future'
+                      ? 'ring-2 ring-green-400 bg-green-50 border-green-200'
                       : 'border-gray-200 bg-gray-50'
+                  } ${
+                    !editingTask || editingTask.taskId !== task.id ? 'cursor-move' : ''
                   }`}
-                  draggable
+                  draggable={!editingTask || editingTask.taskId !== task.id}
                   onDragStart={(e) => handleFutureTaskDragStart(e, task)}
-                  onClick={() => handleFutureTaskTap(task)}
+                  onClick={() => {
+                    if (!editingTask) {
+                      handleFutureTaskTap(task);
+                    }
+                  }}
                 >
-                  <Move className="text-gray-400" size={16} />
-                  <span className="flex-1 text-gray-700">
-                    {task.text}
-                    <span className="ml-2 text-xs text-indigo-600">(Drag to schedule)</span>
-                  </span>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      deleteFutureTask(task.id);
-                    }}
-                    className="text-red-500 hover:text-red-700 transition-colors"
-                    title="Delete future task"
-                  >
-                    <X size={16} />
-                  </button>
+                  {editingTask && editingTask.taskId === task.id && editingTask.day === 'future' ? (
+                    <div className="flex items-center gap-2 flex-1">
+                      <input
+                        type="text"
+                        value={editTaskText}
+                        onChange={(e) => setEditTaskText(e.target.value)}
+                        className="flex-1 px-2 py-1 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
+                        onKeyPress={(e) => {
+                          if (e.key === 'Enter') saveEditFutureTask();
+                          if (e.key === 'Escape') cancelEditTask();
+                        }}
+                        autoFocus
+                      />
+                      <button
+                        onClick={saveEditFutureTask}
+                        disabled={!editTaskText.trim()}
+                        className="px-2 py-1 bg-green-600 text-white rounded text-xs hover:bg-green-700 transition-colors disabled:opacity-50"
+                      >
+                        Save
+                      </button>
+                      <button
+                        onClick={cancelEditTask}
+                        className="px-2 py-1 bg-gray-500 text-white rounded text-xs hover:bg-gray-600 transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <Move className="text-gray-400" size={16} />
+                      <span className="flex-1 text-gray-700">
+                        {task.text}
+                        <span className="ml-2 text-xs text-indigo-600">(Drag to schedule)</span>
+                      </span>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            startEditFutureTask(task);
+                          }}
+                          className="text-blue-500 hover:text-blue-700 transition-colors"
+                          title="Edit future task"
+                        >
+                          <Edit3 size={16} />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            deleteFutureTask(task.id);
+                          }}
+                          className="text-red-500 hover:text-red-700 transition-colors"
+                          title="Delete future task"
+                        >
+                          <X size={16} />
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </div>
               ))}
               {(!futureTasks || futureTasks.length === 0) && (
@@ -851,6 +991,7 @@ export default function PlannerHabitTracker() {
           <p>• Click the <Plus className="inline w-4 h-4 mx-1" /> button next to each day to add tasks directly to that day</p>
           <div className="space-y-1">
             <p>• <strong>Future Tasks:</strong> Add tasks to the Future Tasks repository and drag them to specific days when ready to schedule</p>
+            <p>• <strong>Edit Tasks:</strong> Click the <Edit3 className="inline w-3 h-3 mx-1" /> button to edit any task text inline</p>
             <p>• <strong>Desktop:</strong> Drag and drop incomplete tasks between days to reschedule them</p>
             <p>• <strong>Mobile:</strong> Tap a task (with <Move className="inline w-3 h-3 mx-1" /> icon) to select it, then tap the day you want to move it to</p>
             <p>• <strong>Duplicate:</strong> Click the <Copy className="inline w-3 h-3 mx-1" /> button to copy a task, then tap any day to create a duplicate there</p>
