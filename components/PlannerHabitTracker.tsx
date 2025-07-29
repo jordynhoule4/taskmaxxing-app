@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Check, Plus, X, Edit3, Calendar, Target, Repeat, LogOut, BarChart, Move, Copy, FileText } from 'lucide-react';
+import { Check, Plus, X, Edit3, Calendar, Target, Repeat, LogOut, BarChart, Move, Copy, FileText, MessageSquare, Save } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 interface Habit {
@@ -33,6 +33,8 @@ export default function PlannerHabitTracker() {
   const [taskToDuplicate, setTaskToDuplicate] = useState<{task: any, fromDay: string} | null>(null);
   const [editingTask, setEditingTask] = useState<{taskId: number, day: string} | null>(null);
   const [editTaskText, setEditTaskText] = useState('');
+  const [taskNotesOpen, setTaskNotesOpen] = useState<{taskId: number, day: string} | null>(null);
+  const [taskNoteText, setTaskNoteText] = useState('');
 
   const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
