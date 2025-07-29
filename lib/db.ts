@@ -28,6 +28,28 @@ export async function query(text: string, params?: any[]) {
   }
 }
 
+// Helper function to handle column fallback queries
+async function queryWithColumnFallback(
+  primaryQuery: string,
+  fallbackQuery: string,
+  primaryParams: any[],
+  fallbackParams: any[],
+  columnName: string,
+  fallbackTransform?: (rows: any[]) => any[]
+) {
+  try {
+    const result = await query(primaryQuery, primaryParams);
+    return result.rows;
+  } catch (error: any) {
+    if (error.message && error.message.includes(columnName)) {
+      console.log(`${columnName} column not found, using fallback query`);
+      const result = await query(fallbackQuery, fallbackParams);
+      return fallbackTransform ? fallbackTransform(result.rows) : result.rows;
+    }
+    throw error;
+  }
+}
+
 export async function createUser(email: string, passwordHash: string, name: string) {
   const result = await query(
     'INSERT INTO users (email, password_hash, name) VALUES ($1, $2, $3) RETURNING id, email, name',
@@ -45,56 +67,29 @@ export async function getUserByEmail(email: string) {
 }
 
 export async function getUserHabits(userId: number) {
-  // Try with target column first, fallback if it doesn't exist
-  try {
-    const result = await query(
-      'SELECT id, name, target FROM habits WHERE user_id = $1 AND is_active = true ORDER BY created_at',
-      [userId]
-    );
-    return result.rows;
-  } catch (error: any) {
-    // If target column doesn't exist, use default of 7
-    if (error.message && error.message.includes('target')) {
-      console.log('target column not found in habits, using fallback');
-      const result = await query(
-        'SELECT id, name FROM habits WHERE user_id = $1 AND is_active = true ORDER BY created_at',
-        [userId]
-      );
-      return result.rows.map(row => ({
-        ...row,
-        target: 7
-      }));
-    }
-    throw error;
-  }
+  return queryWithColumnFallback(
+    'SELECT id, name, target FROM habits WHERE user_id = $1 AND is_active = true ORDER BY created_at',
+    'SELECT id, name FROM habits WHERE user_id = $1 AND is_active = true ORDER BY created_at',
+    [userId],
+    [userId],
+    'target',
+    (rows) => rows.map(row => ({ ...row, target: 7 }))
+  );
 }
 
 export async function createHabit(userId: number, name: string, target: number = 7) {
   const sanitizedName = name.trim().substring(0, 100);
   const sanitizedTarget = Math.max(1, Math.min(7, target)); // Ensure target is between 1-7
   
-  // Try with target column first, fallback if it doesn't exist
-  try {
-    const result = await query(
-      'INSERT INTO habits (user_id, name, target) VALUES ($1, $2, $3) RETURNING id, name, target',
-      [userId, sanitizedName, sanitizedTarget]
-    );
-    return result.rows[0];
-  } catch (error: any) {
-    // If target column doesn't exist, create without it
-    if (error.message && error.message.includes('target')) {
-      console.log('target column not found in createHabit, using fallback');
-      const result = await query(
-        'INSERT INTO habits (user_id, name) VALUES ($1, $2) RETURNING id, name',
-        [userId, sanitizedName]
-      );
-      return {
-        ...result.rows[0],
-        target: 7
-      };
-    }
-    throw error;
-  }
+  const rows = await queryWithColumnFallback(
+    'INSERT INTO habits (user_id, name, target) VALUES ($1, $2, $3) RETURNING id, name, target',
+    'INSERT INTO habits (user_id, name) VALUES ($1, $2) RETURNING id, name',
+    [userId, sanitizedName, sanitizedTarget],
+    [userId, sanitizedName],
+    'target',
+    (rows) => rows.map(row => ({ ...row, target: 7 }))
+  );
+  return rows[0];
 }
 
 export async function deleteHabit(userId: number, habitId: number) {
