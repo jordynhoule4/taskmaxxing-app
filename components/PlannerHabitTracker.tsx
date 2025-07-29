@@ -484,6 +484,13 @@ export default function PlannerHabitTracker() {
           
           <div className="flex items-center gap-2 self-start sm:self-auto">
             <button
+              onClick={() => router.push('/notes')}
+              className="px-3 sm:px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors text-sm flex items-center gap-2"
+            >
+              <FileText size={16} />
+              <span className="hidden sm:inline">Notes</span>
+            </button>
+            <button
               onClick={() => router.push('/stats')}
               className="px-3 sm:px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-sm flex items-center gap-2"
             >
