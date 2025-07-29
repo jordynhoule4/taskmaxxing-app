@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getWeekData, saveWeekData, getAllWeeksData } from '@/lib/db';
+import { getWeekData, saveWeekData, getAllWeeksData, ensureFutureTasksColumn } from '@/lib/db';
 import { getUserFromRequest } from '@/lib/auth';
 
 export async function GET(request: NextRequest) {
   try {
+    // Try to ensure the future_tasks column exists
+    await ensureFutureTasksColumn();
+    
     const user = await getUserFromRequest(request);
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -66,6 +69,9 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    // Try to ensure the future_tasks column exists
+    await ensureFutureTasksColumn();
+    
     const user = await getUserFromRequest(request);
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

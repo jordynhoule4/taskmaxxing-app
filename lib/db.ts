@@ -74,11 +74,29 @@ export async function getWeekData(userId: number, weekKey: string) {
     throw new Error('Invalid week key format');
   }
   
-  const result = await query(
-    'SELECT daily_tasks, weekly_goals, habit_completions, future_tasks, week_locked FROM week_data WHERE user_id = $1 AND week_key = $2',
-    [userId, weekKey]
-  );
-  return result.rows[0];
+  // Try with future_tasks column first, fallback if it doesn't exist
+  try {
+    const result = await query(
+      'SELECT daily_tasks, weekly_goals, habit_completions, future_tasks, week_locked FROM week_data WHERE user_id = $1 AND week_key = $2',
+      [userId, weekKey]
+    );
+    return result.rows[0];
+  } catch (error: any) {
+    // If future_tasks column doesn't exist, try without it
+    if (error.message && error.message.includes('future_tasks')) {
+      console.log('future_tasks column not found, using fallback query');
+      const result = await query(
+        'SELECT daily_tasks, weekly_goals, habit_completions, week_locked FROM week_data WHERE user_id = $1 AND week_key = $2',
+        [userId, weekKey]
+      );
+      const data = result.rows[0];
+      if (data) {
+        data.future_tasks = []; // Add empty future_tasks for compatibility
+      }
+      return data;
+    }
+    throw error;
+  }
 }
 
 export async function saveWeekData(
@@ -90,27 +108,79 @@ export async function saveWeekData(
   futureTasks: any,
   weekLocked: boolean
 ) {
-  const result = await query(
-    `INSERT INTO week_data (user_id, week_key, daily_tasks, weekly_goals, habit_completions, future_tasks, week_locked, updated_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP)
-     ON CONFLICT (user_id, week_key) 
-     DO UPDATE SET 
-       daily_tasks = EXCLUDED.daily_tasks,
-       weekly_goals = EXCLUDED.weekly_goals,
-       habit_completions = EXCLUDED.habit_completions,
-       future_tasks = EXCLUDED.future_tasks,
-       week_locked = EXCLUDED.week_locked,
-       updated_at = CURRENT_TIMESTAMP
-     RETURNING *`,
-    [userId, weekKey, JSON.stringify(dailyTasks), JSON.stringify(weeklyGoals), JSON.stringify(habitCompletions), JSON.stringify(futureTasks), weekLocked]
-  );
-  return result.rows[0];
+  // Try with future_tasks column first, fallback if it doesn't exist
+  try {
+    const result = await query(
+      `INSERT INTO week_data (user_id, week_key, daily_tasks, weekly_goals, habit_completions, future_tasks, week_locked, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP)
+       ON CONFLICT (user_id, week_key) 
+       DO UPDATE SET 
+         daily_tasks = EXCLUDED.daily_tasks,
+         weekly_goals = EXCLUDED.weekly_goals,
+         habit_completions = EXCLUDED.habit_completions,
+         future_tasks = EXCLUDED.future_tasks,
+         week_locked = EXCLUDED.week_locked,
+         updated_at = CURRENT_TIMESTAMP
+       RETURNING *`,
+      [userId, weekKey, JSON.stringify(dailyTasks), JSON.stringify(weeklyGoals), JSON.stringify(habitCompletions), JSON.stringify(futureTasks), weekLocked]
+    );
+    return result.rows[0];
+  } catch (error: any) {
+    // If future_tasks column doesn't exist, save without it
+    if (error.message && error.message.includes('future_tasks')) {
+      console.log('future_tasks column not found, saving without it');
+      const result = await query(
+        `INSERT INTO week_data (user_id, week_key, daily_tasks, weekly_goals, habit_completions, week_locked, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)
+         ON CONFLICT (user_id, week_key) 
+         DO UPDATE SET 
+           daily_tasks = EXCLUDED.daily_tasks,
+           weekly_goals = EXCLUDED.weekly_goals,
+           habit_completions = EXCLUDED.habit_completions,
+           week_locked = EXCLUDED.week_locked,
+           updated_at = CURRENT_TIMESTAMP
+         RETURNING *`,
+        [userId, weekKey, JSON.stringify(dailyTasks), JSON.stringify(weeklyGoals), JSON.stringify(habitCompletions), weekLocked]
+      );
+      return result.rows[0];
+    }
+    throw error;
+  }
+}
+
+// Try to add future_tasks column if it doesn't exist (safe migration)
+export async function ensureFutureTasksColumn() {
+  try {
+    await query('ALTER TABLE week_data ADD COLUMN IF NOT EXISTS future_tasks JSONB DEFAULT \'[]\'');
+    console.log('future_tasks column ensured');
+  } catch (error: any) {
+    // Ignore errors if column already exists or other permission issues
+    console.log('Could not add future_tasks column (this is OK):', error.message);
+  }
 }
 
 export async function getAllWeeksData(userId: number) {
-  const result = await query(
-    'SELECT week_key, daily_tasks, weekly_goals, habit_completions, future_tasks, week_locked FROM week_data WHERE user_id = $1 ORDER BY week_key',
-    [userId]
-  );
-  return result.rows;
+  // Try with future_tasks column first, fallback if it doesn't exist
+  try {
+    const result = await query(
+      'SELECT week_key, daily_tasks, weekly_goals, habit_completions, future_tasks, week_locked FROM week_data WHERE user_id = $1 ORDER BY week_key',
+      [userId]
+    );
+    return result.rows;
+  } catch (error: any) {
+    // If future_tasks column doesn't exist, try without it
+    if (error.message && error.message.includes('future_tasks')) {
+      console.log('future_tasks column not found in getAllWeeksData, using fallback');
+      const result = await query(
+        'SELECT week_key, daily_tasks, weekly_goals, habit_completions, week_locked FROM week_data WHERE user_id = $1 ORDER BY week_key',
+        [userId]
+      );
+      // Add empty future_tasks for compatibility
+      return result.rows.map(row => ({
+        ...row,
+        future_tasks: []
+      }));
+    }
+    throw error;
+  }
 }
