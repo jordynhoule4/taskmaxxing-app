@@ -9,9 +9,17 @@ interface Habit {
   name: string;
 }
 
+// Helper function to get Monday of current week
+const getMondayOfWeek = (date: Date) => {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1); // adjust when day is Sunday
+  return new Date(d.setDate(diff));
+};
+
 export default function PlannerHabitTracker() {
   const router = useRouter();
-  const [currentWeekDate, setCurrentWeekDate] = useState(new Date());
+  const [currentWeekDate, setCurrentWeekDate] = useState(() => getMondayOfWeek(new Date()));
   const [allWeeksData, setAllWeeksData] = useState<any>({});
   const [habits, setHabits] = useState<Habit[]>([]);
   const [newTask, setNewTask] = useState('');
@@ -34,12 +42,9 @@ export default function PlannerHabitTracker() {
   };
 
   const getCurrentWeekDisplay = () => {
-    const options: Intl.DateTimeFormatOptions = { 
-      month: 'short', 
-      day: 'numeric',
-      year: 'numeric'
-    };
-    return `Week of ${currentWeekDate.toLocaleDateString('en-US', options)}`;
+    const month = currentWeekDate.getMonth() + 1;
+    const day = currentWeekDate.getDate();
+    return `${month}/${day} Week`;
   };
 
   const currentWeekKey = getCurrentWeekKey();
@@ -125,7 +130,8 @@ export default function PlannerHabitTracker() {
   const navigateWeek = (direction: number) => {
     const newDate = new Date(currentWeekDate);
     newDate.setDate(newDate.getDate() + (direction * 7));
-    setCurrentWeekDate(newDate);
+    // Ensure the new date is always a Monday
+    setCurrentWeekDate(getMondayOfWeek(newDate));
   };
 
   const handleLogout = async () => {
