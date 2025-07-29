@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Check, Plus, X, Edit3, Calendar, Target, Repeat, LogOut } from 'lucide-react';
+import { Check, Plus, X, Edit3, Calendar, Target, Repeat, LogOut, BarChart } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 interface Habit {
@@ -17,8 +17,9 @@ export default function PlannerHabitTracker() {
   const [newTask, setNewTask] = useState('');
   const [newGoal, setNewGoal] = useState('');
   const [newHabit, setNewHabit] = useState('');
-  const [selectedDay, setSelectedDay] = useState('Monday');
+  const [newTaskForDay, setNewTaskForDay] = useState<{[key: string]: string}>({});
   const [loading, setLoading] = useState(true);
+  const [draggedTask, setDraggedTask] = useState<{task: any, fromDay: string} | null>(null);
 
   const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
@@ -129,21 +130,80 @@ export default function PlannerHabitTracker() {
     }
   };
 
-  const addTask = () => {
-    if (newTask.trim() && !weekLocked) {
+  const addTask = (day: string) => {
+    const taskText = newTaskForDay[day];
+    if (taskText?.trim() && !weekLocked) {
       const updatedTasks = {
         ...dailyTasks,
-        [selectedDay]: [...(dailyTasks[selectedDay] || []), { 
+        [day]: [...(dailyTasks[day] || []), { 
           id: Date.now(), 
-          text: newTask, 
+          text: taskText, 
           completed: false,
-          originalDay: selectedDay,
+          originalDay: day,
           completionStatus: null
         }]
       };
       updateCurrentWeekData({ dailyTasks: updatedTasks });
-      setNewTask('');
+      setNewTaskForDay(prev => ({ ...prev, [day]: '' }));
     }
+  };
+
+  const handleDragStart = (e: React.DragEvent, task: any, fromDay: string) => {
+    setDraggedTask({ task, fromDay });
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleDrop = (e: React.DragEvent, toDay: string) => {
+    e.preventDefault();
+    if (!draggedTask) return;
+
+    const { task, fromDay } = draggedTask;
+    if (fromDay === toDay) {
+      setDraggedTask(null);
+      return;
+    }
+
+    // Determine completion status based on original day vs current day
+    const originalDayIndex = days.indexOf(task.originalDay);
+    const completedDayIndex = days.indexOf(toDay);
+    let completionStatus = null;
+    
+    if (completedDayIndex < originalDayIndex) {
+      completionStatus = 'early'; // blue
+    } else if (completedDayIndex > originalDayIndex) {
+      completionStatus = 'late'; // yellow
+    }
+
+    // Remove from original day
+    const updatedFromTasks = dailyTasks[fromDay]?.filter((t: any) => t.id !== task.id) || [];
+    
+    // Add to new day with updated status
+    const updatedToTasks = [...(dailyTasks[toDay] || []), { 
+      ...task, 
+      completed: true,
+      completionStatus 
+    }];
+
+    const updatedTasks = {
+      ...dailyTasks,
+      [fromDay]: updatedFromTasks,
+      [toDay]: updatedToTasks
+    };
+
+    updateCurrentWeekData({ dailyTasks: updatedTasks });
+    setDraggedTask(null);
+  };
+
+  const getTaskColorClass = (task: any) => {
+    if (!task.completed) return 'text-gray-700';
+    if (task.completionStatus === 'early') return 'text-blue-600 bg-blue-50 border-blue-200';
+    if (task.completionStatus === 'late') return 'text-yellow-700 bg-yellow-50 border-yellow-200';
+    return 'text-green-600 bg-green-50 border-green-200'; // completed on time
   };
 
   const toggleTask = (day: string, taskId: number) => {
@@ -269,13 +329,22 @@ export default function PlannerHabitTracker() {
             </button>
           </h1>
           
-          <button
-            onClick={handleLogout}
-            className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors text-sm flex items-center gap-2"
-          >
-            <LogOut size={16} />
-            Logout
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => router.push('/stats')}
+              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-sm flex items-center gap-2"
+            >
+              <BarChart size={16} />
+              Stats
+            </button>
+            <button
+              onClick={handleLogout}
+              className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors text-sm flex items-center gap-2"
+            >
+              <LogOut size={16} />
+              Logout
+            </button>
+          </div>
         </div>
         
         <p className="text-gray-600">Take the task pill today! 💊</p>
@@ -289,41 +358,44 @@ export default function PlannerHabitTracker() {
               Daily Tasks
             </h2>
             
-            <div className="mb-4 flex flex-col sm:flex-row gap-2">
-              <select
-                value={selectedDay}
-                onChange={(e) => setSelectedDay(e.target.value)}
-                className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 sm:w-auto"
-              >
-                {days.map(day => (
-                  <option key={day} value={day}>{day}</option>
-                ))}
-              </select>
-              <div className="flex gap-2 flex-1">
-                <input
-                  type="text"
-                  value={newTask}
-                  onChange={(e) => setNewTask(e.target.value)}
-                  placeholder="Add new task"
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  onKeyPress={(e) => e.key === 'Enter' && addTask()}
-                />
-                <button
-                  onClick={addTask}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex-shrink-0"
-                >
-                  <Plus size={20} />
-                </button>
-              </div>
-            </div>
 
             <div className="space-y-4">
               {days.map(day => (
-                <div key={day} className="border border-gray-200 rounded-lg p-4">
-                  <h3 className="font-semibold text-gray-700 mb-2">{day}:</h3>
+                <div 
+                  key={day} 
+                  className="border border-gray-200 rounded-lg p-4"
+                  onDragOver={handleDragOver}
+                  onDrop={(e) => handleDrop(e, day)}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="font-semibold text-gray-700">{day}:</h3>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={newTaskForDay[day] || ''}
+                        onChange={(e) => setNewTaskForDay(prev => ({ ...prev, [day]: e.target.value }))}
+                        placeholder="Add task"
+                        className="px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 w-32"
+                        onKeyPress={(e) => e.key === 'Enter' && addTask(day)}
+                      />
+                      <button
+                        onClick={() => addTask(day)}
+                        className="p-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                      >
+                        <Plus size={16} />
+                      </button>
+                    </div>
+                  </div>
                   <div className="space-y-2">
                     {(dailyTasks[day] || []).map((task: any) => (
-                      <div key={task.id} className="flex items-center gap-2">
+                      <div 
+                        key={task.id} 
+                        className={`flex items-center gap-2 p-2 rounded border ${
+                          getTaskColorClass(task)
+                        } ${!task.completed ? 'cursor-move hover:shadow-sm' : ''}`}
+                        draggable={!task.completed}
+                        onDragStart={(e) => handleDragStart(e, task, day)}
+                      >
                         <button
                           onClick={() => toggleTask(day, task.id)}
                           className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
@@ -334,8 +406,13 @@ export default function PlannerHabitTracker() {
                         >
                           {task.completed && <Check size={14} />}
                         </button>
-                        <span className={`flex-1 ${task.completed ? 'line-through text-gray-500' : 'text-gray-700'}`}>
+                        <span className={`flex-1 ${task.completed ? 'line-through' : ''}`}>
                           {task.text}
+                          {task.completed && task.completionStatus && (
+                            <span className="ml-2 text-xs">
+                              {task.completionStatus === 'early' ? '(Early)' : task.completionStatus === 'late' ? '(Late)' : ''}
+                            </span>
+                          )}
                         </span>
                         <button
                           onClick={() => deleteTask(day, task.id)}
@@ -468,6 +545,30 @@ export default function PlannerHabitTracker() {
               {weeklyGoals.length === 0 && (
                 <p className="text-gray-400 italic">No weekly goals set</p>
               )}
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      {/* Task System Explanation */}
+      <div className="mt-8 bg-blue-50 rounded-lg p-6">
+        <h3 className="text-lg font-semibold text-gray-800 mb-3">How the Task System Works</h3>
+        <div className="space-y-2 text-sm text-gray-600">
+          <p>• Click the <Plus className="inline w-4 h-4 mx-1" /> button next to each day to add tasks directly to that day</p>
+          <p>• Drag and drop incomplete tasks between days to reschedule them</p>
+          <p>• When you complete a task on a different day than planned:</p>
+          <div className="ml-4 space-y-1">
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 bg-blue-100 border border-blue-200 rounded"></div>
+              <span className="text-blue-600">Blue tasks = Completed early (before the planned day)</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 bg-yellow-100 border border-yellow-200 rounded"></div>
+              <span className="text-yellow-700">Yellow tasks = Completed late (after the planned day)</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 bg-green-100 border border-green-200 rounded"></div>
+              <span className="text-green-600">Green tasks = Completed on time</span>
             </div>
           </div>
         </div>
