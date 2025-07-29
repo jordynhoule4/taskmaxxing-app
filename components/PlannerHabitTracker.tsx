@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Check, Plus, X, Edit3, Calendar, Target, Repeat, LogOut, BarChart } from 'lucide-react';
+import { Check, Plus, X, Edit3, Calendar, Target, Repeat, LogOut, BarChart, Move } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 interface Habit {
@@ -20,6 +20,7 @@ export default function PlannerHabitTracker() {
   const [newTaskForDay, setNewTaskForDay] = useState<{[key: string]: string}>({});
   const [loading, setLoading] = useState(true);
   const [draggedTask, setDraggedTask] = useState<{task: any, fromDay: string} | null>(null);
+  const [selectedTaskForMove, setSelectedTaskForMove] = useState<{task: any, fromDay: string} | null>(null);
 
   const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
@@ -206,6 +207,55 @@ export default function PlannerHabitTracker() {
     return 'text-green-600 bg-green-50 border-green-200'; // completed on time
   };
 
+  const handleTaskTap = (task: any, fromDay: string) => {
+    if (task.completed) return; // Can't move completed tasks
+    
+    if (selectedTaskForMove && selectedTaskForMove.task.id === task.id) {
+      // Deselect if tapping the same task
+      setSelectedTaskForMove(null);
+    } else {
+      // Select this task for moving
+      setSelectedTaskForMove({ task, fromDay });
+    }
+  };
+
+  const handleDayTapForMove = (toDay: string) => {
+    if (!selectedTaskForMove) return;
+    
+    const { task, fromDay } = selectedTaskForMove;
+    if (fromDay === toDay) {
+      setSelectedTaskForMove(null);
+      return;
+    }
+
+    // Same logic as drag and drop
+    const originalDayIndex = days.indexOf(task.originalDay);
+    const completedDayIndex = days.indexOf(toDay);
+    let completionStatus = null;
+    
+    if (completedDayIndex < originalDayIndex) {
+      completionStatus = 'early';
+    } else if (completedDayIndex > originalDayIndex) {
+      completionStatus = 'late';
+    }
+
+    const updatedFromTasks = dailyTasks[fromDay]?.filter((t: any) => t.id !== task.id) || [];
+    const updatedToTasks = [...(dailyTasks[toDay] || []), { 
+      ...task, 
+      completed: true,
+      completionStatus 
+    }];
+
+    const updatedTasks = {
+      ...dailyTasks,
+      [fromDay]: updatedFromTasks,
+      [toDay]: updatedToTasks
+    };
+
+    updateCurrentWeekData({ dailyTasks: updatedTasks });
+    setSelectedTaskForMove(null);
+  };
+
   const toggleTask = (day: string, taskId: number) => {
     const updatedTasks = {
       ...dailyTasks,
@@ -363,12 +413,22 @@ export default function PlannerHabitTracker() {
               {days.map(day => (
                 <div 
                   key={day} 
-                  className="border border-gray-200 rounded-lg p-4"
+                  className={`border rounded-lg p-4 ${
+                    selectedTaskForMove && selectedTaskForMove.fromDay !== day
+                      ? 'border-blue-400 bg-blue-50 cursor-pointer'
+                      : 'border-gray-200'
+                  }`}
                   onDragOver={handleDragOver}
                   onDrop={(e) => handleDrop(e, day)}
+                  onClick={() => handleDayTapForMove(day)}
                 >
                   <div className="flex items-center justify-between mb-2">
-                    <h3 className="font-semibold text-gray-700">{day}:</h3>
+                    <h3 className="font-semibold text-gray-700">
+                      {day}:
+                      {selectedTaskForMove && selectedTaskForMove.fromDay !== day && (
+                        <span className="ml-2 text-xs text-blue-600">(Tap to move here)</span>
+                      )}
+                    </h3>
                     <div className="flex items-center gap-2">
                       <input
                         type="text"
@@ -392,9 +452,19 @@ export default function PlannerHabitTracker() {
                         key={task.id} 
                         className={`flex items-center gap-2 p-2 rounded border ${
                           getTaskColorClass(task)
-                        } ${!task.completed ? 'cursor-move hover:shadow-sm' : ''}`}
+                        } ${
+                          !task.completed ? 'cursor-move hover:shadow-sm' : ''
+                        } ${
+                          selectedTaskForMove && selectedTaskForMove.task.id === task.id
+                            ? 'ring-2 ring-blue-400 bg-blue-100'
+                            : ''
+                        }`}
                         draggable={!task.completed}
                         onDragStart={(e) => handleDragStart(e, task, day)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleTaskTap(task, day);
+                        }}
                       >
                         <button
                           onClick={() => toggleTask(day, task.id)}
@@ -412,6 +482,9 @@ export default function PlannerHabitTracker() {
                             <span className="ml-2 text-xs">
                               {task.completionStatus === 'early' ? '(Early)' : task.completionStatus === 'late' ? '(Late)' : ''}
                             </span>
+                          )}
+                          {!task.completed && (
+                            <Move className="inline ml-2 text-gray-400" size={12} />
                           )}
                         </span>
                         <button
@@ -555,7 +628,10 @@ export default function PlannerHabitTracker() {
         <h3 className="text-lg font-semibold text-gray-800 mb-3">How the Task System Works</h3>
         <div className="space-y-2 text-sm text-gray-600">
           <p>• Click the <Plus className="inline w-4 h-4 mx-1" /> button next to each day to add tasks directly to that day</p>
-          <p>• Drag and drop incomplete tasks between days to reschedule them</p>
+          <div className="space-y-1">
+            <p>• <strong>Desktop:</strong> Drag and drop incomplete tasks between days to reschedule them</p>
+            <p>• <strong>Mobile:</strong> Tap a task (with <Move className="inline w-3 h-3 mx-1" /> icon) to select it, then tap the day you want to move it to</p>
+          </div>
           <p>• When you complete a task on a different day than planned:</p>
           <div className="ml-4 space-y-1">
             <div className="flex items-center gap-2">
