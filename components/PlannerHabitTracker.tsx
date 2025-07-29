@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Check, Plus, X, Edit3, Calendar, Target, Repeat, LogOut, BarChart, Move, Copy } from 'lucide-react';
+import { Check, Plus, X, Edit3, Calendar, Target, Repeat, LogOut, BarChart, Move, Copy, FileText } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 interface Habit {
