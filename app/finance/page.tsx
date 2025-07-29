@@ -26,7 +26,7 @@ export default function FinancePage() {
     monthlyIncome: 0,
     rent: 0,
     savingsGoal: 0,
-    spendingLimit: 2000
+    spendingLimit: 0
   });
   const [currentMonth, setCurrentMonth] = useState(() => {
     const now = new Date();
@@ -481,8 +481,8 @@ export default function FinancePage() {
                     <input
                       type="number"
                       value={settings.spendingLimit}
-                      onChange={(e) => setSettings(prev => ({ ...prev, spendingLimit: parseFloat(e.target.value) || 2000 }))}
-                      placeholder="2000.00"
+                      onChange={(e) => setSettings(prev => ({ ...prev, spendingLimit: parseFloat(e.target.value) || 0 }))}
+                      placeholder="0.00"
                       className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
                       step="0.01"
                     />

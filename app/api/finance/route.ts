@@ -63,7 +63,7 @@ export async function GET(request: NextRequest) {
         monthly_income REAL NOT NULL DEFAULT 0,
         rent REAL NOT NULL DEFAULT 0,
         savings_goal REAL NOT NULL DEFAULT 0,
-        spending_limit REAL NOT NULL DEFAULT 2000,
+        spending_limit REAL NOT NULL DEFAULT 0,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users (id),
@@ -133,7 +133,7 @@ export async function POST(request: NextRequest) {
         monthly_income REAL NOT NULL DEFAULT 0,
         rent REAL NOT NULL DEFAULT 0,
         savings_goal REAL NOT NULL DEFAULT 0,
-        spending_limit REAL NOT NULL DEFAULT 2000,
+        spending_limit REAL NOT NULL DEFAULT 0,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users (id),
@@ -153,7 +153,7 @@ export async function POST(request: NextRequest) {
            savings_goal = excluded.savings_goal,
            spending_limit = excluded.spending_limit,
            updated_at = CURRENT_TIMESTAMP`,
-        [userId, settings.monthlyIncome || 0, settings.rent || 0, settings.savingsGoal || 0, settings.spendingLimit || 2000]
+        [userId, settings.monthlyIncome || 0, settings.rent || 0, settings.savingsGoal || 0, settings.spendingLimit || 0]
       );
     }
 

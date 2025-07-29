@@ -80,7 +80,11 @@ export default function PlannerHabitTracker() {
       const habitsResponse = await fetch('/api/habits');
       if (habitsResponse.ok) {
         const habitsData = await habitsResponse.json();
-        setHabits(habitsData.habits);
+        console.log('Loaded habits:', habitsData.habits);
+        setHabits(habitsData.habits || []);
+      } else {
+        console.error('Failed to fetch habits:', habitsResponse.status, habitsResponse.statusText);
+        setHabits([]);
       }
 
       const allWeeksResponse = await fetch('/api/weeks?all=true');
@@ -90,6 +94,7 @@ export default function PlannerHabitTracker() {
       }
     } catch (error) {
       console.error('Failed to load initial data:', error);
+      setHabits([]);
     } finally {
       setLoading(false);
     }
