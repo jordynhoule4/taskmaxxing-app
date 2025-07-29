@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Check, Plus, X, Edit3, Calendar, Target, Repeat, LogOut, BarChart, Move, Copy, FileText, MessageSquare, Save } from 'lucide-react';
+import { Check, Plus, X, Edit3, Calendar, Target, Repeat, LogOut, BarChart, Move, Copy, FileText, MessageSquare, Save, DollarSign } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 interface Habit {
@@ -100,9 +100,29 @@ export default function PlannerHabitTracker() {
       const response = await fetch(`/api/weeks?week=${currentWeekKey}`);
       if (response.ok) {
         const data = await response.json();
+        let weekData = data.weekData;
+        
+        // If this week doesn't have future tasks yet, carry them over from the most recent previous week
+        if (!weekData.futureTasks || weekData.futureTasks.length === 0) {
+          const existingWeeks = Object.keys(allWeeksData).sort();
+          const currentWeekIndex = existingWeeks.indexOf(currentWeekKey);
+          
+          // Find the most recent previous week with future tasks
+          for (let i = currentWeekIndex - 1; i >= 0; i--) {
+            const prevWeekData = allWeeksData[existingWeeks[i]];
+            if (prevWeekData?.futureTasks && prevWeekData.futureTasks.length > 0) {
+              weekData = {
+                ...weekData,
+                futureTasks: [...prevWeekData.futureTasks] // Copy future tasks
+              };
+              break;
+            }
+          }
+        }
+        
         setAllWeeksData((prev: any) => ({
           ...prev,
-          [currentWeekKey]: data.weekData
+          [currentWeekKey]: weekData
         }));
       }
     } catch (error) {
@@ -653,6 +673,13 @@ export default function PlannerHabitTracker() {
               <span className="hidden sm:inline">Stats</span>
             </button>
             <button
+              onClick={() => router.push('/finance')}
+              className="px-3 sm:px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors text-sm flex items-center gap-2"
+            >
+              <DollarSign size={16} />
+              <span className="hidden sm:inline">Finance</span>
+            </button>
+            <button
               onClick={handleLogout}
               className="px-3 sm:px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors text-sm flex items-center gap-2"
             >
@@ -1073,36 +1100,38 @@ export default function PlannerHabitTracker() {
               Daily Habits
             </h2>
             
-            <div className="mb-4 flex flex-col sm:flex-row gap-2">
-              <input
-                type="text"
-                value={newHabit}
-                onChange={(e) => setNewHabit(e.target.value)}
-                placeholder="Add new habit"
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
-                onKeyPress={(e) => e.key === 'Enter' && addHabit()}
-              />
-              <div className="flex gap-2">
-                <select
-                  value={newHabitTarget}
-                  onChange={(e) => setNewHabitTarget(parseInt(e.target.value))}
-                  className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
-                  title="Weekly target"
-                >
-                  <option value={1}>1x/week</option>
-                  <option value={2}>2x/week</option>
-                  <option value={3}>3x/week</option>
-                  <option value={4}>4x/week</option>
-                  <option value={5}>5x/week</option>
-                  <option value={6}>6x/week</option>
-                  <option value={7}>Daily</option>
-                </select>
-                <button
-                  onClick={addHabit}
-                  className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors"
-                >
-                  <Plus size={20} />
-                </button>
+            <div className="mb-4">
+              <div className="flex flex-col sm:flex-row gap-2">
+                <input
+                  type="text"
+                  value={newHabit}
+                  onChange={(e) => setNewHabit(e.target.value)}
+                  placeholder="Add new habit"
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  onKeyPress={(e) => e.key === 'Enter' && addHabit()}
+                />
+                <div className="flex gap-2 sm:flex-shrink-0">
+                  <select
+                    value={newHabitTarget}
+                    onChange={(e) => setNewHabitTarget(parseInt(e.target.value))}
+                    className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
+                    title="Weekly target"
+                  >
+                    <option value={1}>1x/week</option>
+                    <option value={2}>2x/week</option>
+                    <option value={3}>3x/week</option>
+                    <option value={4}>4x/week</option>
+                    <option value={5}>5x/week</option>
+                    <option value={6}>6x/week</option>
+                    <option value={7}>Daily</option>
+                  </select>
+                  <button
+                    onClick={addHabit}
+                    className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors flex items-center justify-center"
+                  >
+                    <Plus size={20} />
+                  </button>
+                </div>
               </div>
             </div>
 
