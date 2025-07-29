@@ -628,6 +628,22 @@ export default function PlannerHabitTracker() {
         </div>
       </div>
 
+      {/* Calendar Widget */}
+      {showCalendar && (
+        <div className="bg-white rounded-lg shadow-lg p-4 mb-6 relative">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-gray-800">Jump to Week</h3>
+            <button
+              onClick={() => setShowCalendar(false)}
+              className="text-gray-500 hover:text-gray-700"
+            >
+              <X size={20} />
+            </button>
+          </div>
+          <CalendarWidget currentWeekDate={currentWeekDate} onSelectWeek={jumpToWeek} />
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
           <div className="bg-white rounded-lg shadow-lg p-6">
@@ -1150,6 +1166,139 @@ export default function PlannerHabitTracker() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+interface CalendarWidgetProps {
+  currentWeekDate: Date;
+  onSelectWeek: (date: Date) => void;
+}
+
+function CalendarWidget({ currentWeekDate, onSelectWeek }: CalendarWidgetProps) {
+  const [calendarDate, setCalendarDate] = useState(() => new Date(currentWeekDate));
+  
+  const monthNames = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
+  
+  const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  
+  const getDaysInMonth = (date: Date) => {
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const daysInMonth = lastDay.getDate();
+    const startingDayOfWeek = firstDay.getDay();
+    
+    const days = [];
+    
+    // Add empty cells for days before the first day of the month
+    for (let i = 0; i < startingDayOfWeek; i++) {
+      days.push(null);
+    }
+    
+    // Add all days of the month
+    for (let day = 1; day <= daysInMonth; day++) {
+      days.push(new Date(year, month, day));
+    }
+    
+    return days;
+  };
+  
+  const getMondayOfWeek = (date: Date) => {
+    const d = new Date(date);
+    const day = d.getDay();
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+    return new Date(d.setDate(diff));
+  };
+  
+  const isSameWeek = (date1: Date, date2: Date) => {
+    const monday1 = getMondayOfWeek(date1);
+    const monday2 = getMondayOfWeek(date2);
+    return monday1.getTime() === monday2.getTime();
+  };
+  
+  const navigateMonth = (direction: number) => {
+    const newDate = new Date(calendarDate);
+    newDate.setMonth(newDate.getMonth() + direction);
+    setCalendarDate(newDate);
+  };
+  
+  const handleDateClick = (date: Date) => {
+    onSelectWeek(date);
+  };
+  
+  const days = getDaysInMonth(calendarDate);
+  
+  return (
+    <div className="calendar-widget">
+      {/* Month Navigation */}
+      <div className="flex items-center justify-between mb-4">
+        <button
+          onClick={() => navigateMonth(-1)}
+          className="px-3 py-1 bg-gray-100 text-gray-600 rounded hover:bg-gray-200 transition-colors"
+        >
+          ←
+        </button>
+        <h4 className="text-lg font-semibold text-gray-700">
+          {monthNames[calendarDate.getMonth()]} {calendarDate.getFullYear()}
+        </h4>
+        <button
+          onClick={() => navigateMonth(1)}
+          className="px-3 py-1 bg-gray-100 text-gray-600 rounded hover:bg-gray-200 transition-colors"
+        >
+          →
+        </button>
+      </div>
+      
+      {/* Days of Week Header */}
+      <div className="grid grid-cols-7 gap-1 mb-2">
+        {daysOfWeek.map(day => (
+          <div key={day} className="text-center text-sm font-medium text-gray-500 py-2">
+            {day}
+          </div>
+        ))}
+      </div>
+      
+      {/* Calendar Grid */}
+      <div className="grid grid-cols-7 gap-1">
+        {days.map((date, index) => {
+          if (!date) {
+            return <div key={index} className="p-2"></div>;
+          }
+          
+          const isCurrentWeek = isSameWeek(date, currentWeekDate);
+          const isToday = date.toDateString() === new Date().toDateString();
+          
+          return (
+            <button
+              key={index}
+              onClick={() => handleDateClick(date)}
+              className={`
+                p-2 text-sm rounded hover:bg-blue-100 transition-colors
+                ${isCurrentWeek ? 'bg-blue-500 text-white hover:bg-blue-600' : 'text-gray-700'}
+                ${isToday && !isCurrentWeek ? 'bg-blue-100 font-bold' : ''}
+              `}
+              title={`Week of ${getMondayOfWeek(date).toLocaleDateString()}`}
+            >
+              {date.getDate()}
+            </button>
+          );
+        })}
+      </div>
+      
+      {/* Quick Navigation */}
+      <div className="flex justify-center gap-2 mt-4">
+        <button
+          onClick={() => onSelectWeek(new Date())}
+          className="px-3 py-1 bg-blue-100 text-blue-700 rounded text-sm hover:bg-blue-200 transition-colors"
+        >
+          This Week
+        </button>
+      </div>
     </div>
   );
 }
