@@ -22,6 +22,7 @@ CREATE TABLE week_data (
     daily_tasks JSONB DEFAULT '{}',
     weekly_goals JSONB DEFAULT '[]',
     habit_completions JSONB DEFAULT '{}',
+    future_tasks JSONB DEFAULT '[]',
     week_locked BOOLEAN DEFAULT false,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

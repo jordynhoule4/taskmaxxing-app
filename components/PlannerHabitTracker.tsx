@@ -35,6 +35,7 @@ export default function PlannerHabitTracker() {
   const [editTaskText, setEditTaskText] = useState('');
   const [taskNotesOpen, setTaskNotesOpen] = useState<{taskId: number, day: string} | null>(null);
   const [taskNoteText, setTaskNoteText] = useState('');
+  const [showCalendar, setShowCalendar] = useState(false);
 
   const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
@@ -136,6 +137,11 @@ export default function PlannerHabitTracker() {
     newDate.setDate(newDate.getDate() + (direction * 7));
     // Ensure the new date is always a Monday
     setCurrentWeekDate(getMondayOfWeek(newDate));
+  };
+
+  const jumpToWeek = (date: Date) => {
+    setCurrentWeekDate(getMondayOfWeek(date));
+    setShowCalendar(false);
   };
 
   const handleLogout = async () => {
@@ -562,8 +568,17 @@ export default function PlannerHabitTracker() {
             >
               ←
             </button>
-            <Calendar className="text-blue-600" size={24} />
-            <span className="text-base sm:text-3xl">{getCurrentWeekDisplay()}</span>
+            <div className="relative flex items-center gap-2">
+              <Calendar className="text-blue-600" size={24} />
+              <span className="text-base sm:text-3xl">{getCurrentWeekDisplay()}</span>
+              <button
+                onClick={() => setShowCalendar(!showCalendar)}
+                className="px-2 py-1 bg-blue-100 text-blue-600 rounded-md hover:bg-blue-200 transition-colors text-sm"
+                title="Select week"
+              >
+                📅
+              </button>
+            </div>
             <button
               onClick={() => navigateWeek(1)}
               className="px-2 sm:px-3 py-1 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition-colors text-sm sm:text-lg"

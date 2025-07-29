@@ -22,7 +22,8 @@ export async function GET(request: NextRequest) {
           dailyTasks: week.daily_tasks,
           weeklyGoals: week.weekly_goals,
           habitCompletions: week.habit_completions,
-          weekLocked: week.week_locked
+          weekLocked: week.week_locked,
+          futureTasks: week.future_tasks
         };
       });
 
@@ -41,7 +42,8 @@ export async function GET(request: NextRequest) {
           dailyTasks: {},
           weeklyGoals: [],
           habitCompletions: {},
-          weekLocked: false
+          weekLocked: false,
+          futureTasks: []
         }
       });
     }
@@ -51,7 +53,8 @@ export async function GET(request: NextRequest) {
         dailyTasks: weekData.daily_tasks,
         weeklyGoals: weekData.weekly_goals,
         habitCompletions: weekData.habit_completions,
-        weekLocked: weekData.week_locked
+        weekLocked: weekData.week_locked,
+        futureTasks: weekData.future_tasks
       }
     });
 
@@ -68,7 +71,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { weekKey, dailyTasks, weeklyGoals, habitCompletions, weekLocked } = await request.json();
+    const { weekKey, dailyTasks, weeklyGoals, habitCompletions, weekLocked, futureTasks } = await request.json();
 
     if (!weekKey) {
       return NextResponse.json({ error: 'Week key is required' }, { status: 400 });
@@ -80,6 +83,7 @@ export async function POST(request: NextRequest) {
       dailyTasks || {},
       weeklyGoals || [],
       habitCompletions || {},
+      futureTasks || [],
       weekLocked || false
     );
 

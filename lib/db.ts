@@ -75,7 +75,7 @@ export async function getWeekData(userId: number, weekKey: string) {
   }
   
   const result = await query(
-    'SELECT daily_tasks, weekly_goals, habit_completions, week_locked FROM week_data WHERE user_id = $1 AND week_key = $2',
+    'SELECT daily_tasks, weekly_goals, habit_completions, future_tasks, week_locked FROM week_data WHERE user_id = $1 AND week_key = $2',
     [userId, weekKey]
   );
   return result.rows[0];
@@ -87,27 +87,29 @@ export async function saveWeekData(
   dailyTasks: any, 
   weeklyGoals: any, 
   habitCompletions: any, 
+  futureTasks: any,
   weekLocked: boolean
 ) {
   const result = await query(
-    `INSERT INTO week_data (user_id, week_key, daily_tasks, weekly_goals, habit_completions, week_locked, updated_at)
-     VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)
+    `INSERT INTO week_data (user_id, week_key, daily_tasks, weekly_goals, habit_completions, future_tasks, week_locked, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP)
      ON CONFLICT (user_id, week_key) 
      DO UPDATE SET 
        daily_tasks = EXCLUDED.daily_tasks,
        weekly_goals = EXCLUDED.weekly_goals,
        habit_completions = EXCLUDED.habit_completions,
+       future_tasks = EXCLUDED.future_tasks,
        week_locked = EXCLUDED.week_locked,
        updated_at = CURRENT_TIMESTAMP
      RETURNING *`,
-    [userId, weekKey, JSON.stringify(dailyTasks), JSON.stringify(weeklyGoals), JSON.stringify(habitCompletions), weekLocked]
+    [userId, weekKey, JSON.stringify(dailyTasks), JSON.stringify(weeklyGoals), JSON.stringify(habitCompletions), JSON.stringify(futureTasks), weekLocked]
   );
   return result.rows[0];
 }
 
 export async function getAllWeeksData(userId: number) {
   const result = await query(
-    'SELECT week_key, daily_tasks, weekly_goals, habit_completions, week_locked FROM week_data WHERE user_id = $1 ORDER BY week_key',
+    'SELECT week_key, daily_tasks, weekly_goals, habit_completions, future_tasks, week_locked FROM week_data WHERE user_id = $1 ORDER BY week_key',
     [userId]
   );
   return result.rows;
