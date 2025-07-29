@@ -110,13 +110,24 @@ export default function NotesPage() {
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    
+    if (diffDays === 0) {
+      return `Today at ${date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`;
+    } else if (diffDays === 1) {
+      return `Yesterday at ${date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`;
+    } else if (diffDays < 7) {
+      return `${diffDays} days ago`;
+    } else {
+      return date.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric'
+      });
+    }
   };
 
   if (loading) {
@@ -316,8 +327,8 @@ function NoteCard({ note, isEditing, onEdit, onSave, onCancel, onDelete, formatD
   return (
     <div className="bg-white rounded-lg shadow-lg p-4 hover:shadow-xl transition-shadow">
       <div className="flex justify-between items-start mb-3">
-        <h3 className="font-semibold text-gray-800 text-lg leading-tight">{note.title}</h3>
-        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <h3 className="font-semibold text-gray-800 text-lg leading-tight pr-2">{note.title}</h3>
+        <div className="flex gap-1 opacity-70 hover:opacity-100 transition-opacity flex-shrink-0">
           <button
             onClick={onEdit}
             className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
@@ -344,22 +355,11 @@ function NoteCard({ note, isEditing, onEdit, onSave, onCancel, onDelete, formatD
       </div>
       
       <div className="flex justify-between items-center text-xs text-gray-400">
-        <span>Updated {formatDate(note.updatedAt)}</span>
-        <div className="flex gap-1 opacity-0 hover:opacity-100 transition-opacity">
-          <button
-            onClick={onEdit}
-            className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
-            title="Edit note"
-          >
-            <Edit3 size={14} />
-          </button>
-          <button
-            onClick={onDelete}
-            className="p-1 text-gray-400 hover:text-red-600 transition-colors"
-            title="Delete note"
-          >
-            <Trash2 size={14} />
-          </button>
+        <div className="flex flex-col">
+          <span>Updated {formatDate(note.updatedAt)}</span>
+          {note.createdAt !== note.updatedAt && (
+            <span className="text-gray-300">Created {formatDate(note.createdAt)}</span>
+          )}
         </div>
       </div>
     </div>

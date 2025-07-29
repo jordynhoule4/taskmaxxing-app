@@ -11,7 +11,7 @@ interface Habit {
 
 export default function PlannerHabitTracker() {
   const router = useRouter();
-  const [currentWeekDate, setCurrentWeekDate] = useState(new Date(2025, 6, 28));
+  const [currentWeekDate, setCurrentWeekDate] = useState(new Date());
   const [allWeeksData, setAllWeeksData] = useState<any>({});
   const [habits, setHabits] = useState<Habit[]>([]);
   const [newTask, setNewTask] = useState('');
@@ -34,9 +34,12 @@ export default function PlannerHabitTracker() {
   };
 
   const getCurrentWeekDisplay = () => {
-    const month = currentWeekDate.getMonth() + 1;
-    const day = currentWeekDate.getDate();
-    return `${month}/${day} Week`;
+    const options: Intl.DateTimeFormatOptions = { 
+      month: 'short', 
+      day: 'numeric',
+      year: 'numeric'
+    };
+    return `Week of ${currentWeekDate.toLocaleDateString('en-US', options)}`;
   };
 
   const currentWeekKey = getCurrentWeekKey();

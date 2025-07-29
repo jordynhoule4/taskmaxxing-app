@@ -71,7 +71,7 @@ export async function PUT(
     );
 
     const updatedNote = await db.get(
-      'SELECT * FROM notes WHERE id = ?',
+      'SELECT id, title, content, created_at as createdAt, updated_at as updatedAt FROM notes WHERE id = ?',
       [noteId]
     );
 

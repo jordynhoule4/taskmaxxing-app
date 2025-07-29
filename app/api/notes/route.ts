@@ -54,7 +54,7 @@ export async function GET(request: NextRequest) {
     `);
 
     const notes = await db.all(
-      'SELECT * FROM notes WHERE user_id = ? ORDER BY updated_at DESC',
+      'SELECT id, title, content, created_at as createdAt, updated_at as updatedAt FROM notes WHERE user_id = ? ORDER BY updated_at DESC',
       [userId]
     );
 
@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
     );
 
     const note = await db.get(
-      'SELECT * FROM notes WHERE id = ?',
+      'SELECT id, title, content, created_at as createdAt, updated_at as updatedAt FROM notes WHERE id = ?',
       [result.lastID]
     );
 
