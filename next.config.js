@@ -1,8 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  experimental: {
-    runtime: 'nodejs'
-  }
+  // Removed invalid experimental.runtime option
 }
 
 module.exports = nextConfig
