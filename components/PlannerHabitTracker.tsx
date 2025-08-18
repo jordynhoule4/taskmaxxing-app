@@ -107,35 +107,28 @@ export default function PlannerHabitTracker() {
         const data = await response.json();
         let weekData = data.weekData;
         
-        // Carry over future tasks from all previous weeks (they persist until manually transferred)
+        // Carry over future tasks from the most recent previous week only
         if (!weekData.futureTasks || weekData.futureTasks.length === 0) {
-          // Collect all future tasks from all previous weeks
-          const allFutureTasks = new Map();
-          
-          // Sort weeks chronologically
+          // Sort weeks chronologically to find the most recent week with future tasks
           const sortedWeeks = Object.keys(allWeeksData).sort((a, b) => {
             const dateA = new Date(a);
             const dateB = new Date(b);
-            return dateA.getTime() - dateB.getTime();
+            return dateB.getTime() - dateA.getTime(); // Most recent first
           });
           
-          // Collect future tasks from all previous weeks
+          // Find the most recent week that has future tasks (excluding current week)
+          const currentWeekKeyString = currentWeekKey;
           for (const weekKey of sortedWeeks) {
-            const weekData = allWeeksData[weekKey];
-            if (weekData?.futureTasks && weekData.futureTasks.length > 0) {
-              weekData.futureTasks.forEach((task: any) => {
-                // Use task text as key to avoid duplicates
-                allFutureTasks.set(task.text, task);
-              });
+            if (weekKey !== currentWeekKeyString) {
+              const prevWeekData = allWeeksData[weekKey];
+              if (prevWeekData?.futureTasks && prevWeekData.futureTasks.length > 0) {
+                weekData = {
+                  ...weekData,
+                  futureTasks: [...prevWeekData.futureTasks]
+                };
+                break; // Only take from the most recent week with future tasks
+              }
             }
-          }
-          
-          // If we found any future tasks, add them to current week
-          if (allFutureTasks.size > 0) {
-            weekData = {
-              ...weekData,
-              futureTasks: Array.from(allFutureTasks.values())
-            };
           }
         }
         
