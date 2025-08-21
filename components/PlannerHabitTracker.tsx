@@ -242,6 +242,23 @@ export default function PlannerHabitTracker() {
           [toDay]: updatedToTasks
         }
       });
+    } else if (toDay === 'future') {
+      // Moving from a specific day back to future tasks
+      const updatedFromTasks = dailyTasks[fromDay]?.filter((t: any) => t.id !== task.id) || [];
+      const updatedFutureTasks = [...(futureTasks || []), {
+        ...task,
+        originalDay: null,
+        completed: false,
+        completionStatus: null
+      }];
+
+      updateCurrentWeekData({
+        futureTasks: updatedFutureTasks,
+        dailyTasks: {
+          ...dailyTasks,
+          [fromDay]: updatedFromTasks
+        }
+      });
     } else {
       // Regular day-to-day move
       const originalDayIndex = days.indexOf(task.originalDay);
@@ -316,6 +333,23 @@ export default function PlannerHabitTracker() {
         dailyTasks: {
           ...dailyTasks,
           [toDay]: updatedToTasks
+        }
+      });
+    } else if (toDay === 'future') {
+      // Moving from a specific day back to future tasks
+      const updatedFromTasks = dailyTasks[fromDay]?.filter((t: any) => t.id !== task.id) || [];
+      const updatedFutureTasks = [...(futureTasks || []), {
+        ...task,
+        originalDay: null,
+        completed: false,
+        completionStatus: null
+      }];
+
+      updateCurrentWeekData({
+        futureTasks: updatedFutureTasks,
+        dailyTasks: {
+          ...dailyTasks,
+          [fromDay]: updatedFromTasks
         }
       });
     } else {
@@ -982,10 +1016,26 @@ export default function PlannerHabitTracker() {
 
         <div className="space-y-6">
           {/* Future Tasks Repository */}
-          <div className="bg-white rounded-lg shadow-lg p-6">
+          <div 
+            className={`bg-white rounded-lg shadow-lg p-6 ${
+              selectedTaskForMove && selectedTaskForMove.fromDay !== 'future'
+                ? 'border-2 border-blue-400 bg-blue-50'
+                : ''
+            }`}
+            onDragOver={handleDragOver}
+            onDrop={(e) => handleDrop(e, 'future')}
+            onClick={() => {
+              if (selectedTaskForMove && selectedTaskForMove.fromDay !== 'future') {
+                handleDayTapForMove('future');
+              }
+            }}
+          >
             <h2 className="text-xl font-semibold text-gray-800 mb-4 flex items-center gap-2">
               <Calendar className="text-indigo-600" />
               Future Tasks
+              {selectedTaskForMove && selectedTaskForMove.fromDay !== 'future' && (
+                <span className="ml-2 text-xs text-blue-600">(Tap to move here)</span>
+              )}
             </h2>
             
             <div className="mb-4 flex gap-2">
@@ -1243,10 +1293,11 @@ export default function PlannerHabitTracker() {
           <p>• Click the <Plus className="inline w-4 h-4 mx-1" /> button next to each day to add tasks directly to that day</p>
           <div className="space-y-1">
             <p>• <strong>Future Tasks:</strong> Add tasks to the Future Tasks repository and drag them to specific days when ready to schedule</p>
+            <p>• <strong>Reschedule Tasks:</strong> Drag tasks back to Future Tasks if something comes up and you can no longer do them that day</p>
             <p>• <strong>Task Notes:</strong> Click the <MessageSquare className="inline w-3 h-3 mx-1" /> button to add detailed notes about what a task entails</p>
             <p>• <strong>Edit Tasks:</strong> Click the <Edit3 className="inline w-3 h-3 mx-1" /> button to edit any task text inline</p>
-            <p>• <strong>Desktop:</strong> Drag and drop incomplete tasks between days to reschedule them</p>
-            <p>• <strong>Mobile:</strong> Tap a task (with <Move className="inline w-3 h-3 mx-1" /> icon) to select it, then tap the day you want to move it to</p>
+            <p>• <strong>Desktop:</strong> Drag and drop incomplete tasks between days to reschedule them, or back to Future Tasks</p>
+            <p>• <strong>Mobile:</strong> Tap a task (with <Move className="inline w-3 h-3 mx-1" /> icon) to select it, then tap the day or Future Tasks section you want to move it to</p>
             <p>• <strong>Duplicate:</strong> Click the <Copy className="inline w-3 h-3 mx-1" /> button to copy a task, then tap any day to create a duplicate there</p>
           </div>
           <p>• When you complete a task on a different day than planned:</p>
