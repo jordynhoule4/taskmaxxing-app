@@ -2,10 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import sqlite3 from 'sqlite3';
 import { open } from 'sqlite';
 import path from 'path';
-import jwt from 'jsonwebtoken';
+import { verifyToken } from '@/lib/auth';
 import { cookies } from 'next/headers';
-
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 
 async function getDatabase() {
   const dbPath = path.join(process.cwd(), 'database.sqlite');
@@ -24,8 +22,8 @@ async function getUserFromToken(request: NextRequest) {
   }
 
   try {
-    const payload = jwt.verify(token, JWT_SECRET) as any;
-    return payload.userId;
+    const payload = await verifyToken(token);
+    return payload?.userId;
   } catch (error) {
     return null;
   }

@@ -4,9 +4,10 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "npm run init-db && next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "init-db": "node scripts/init-db.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
