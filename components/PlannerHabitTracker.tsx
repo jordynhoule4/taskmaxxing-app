@@ -107,28 +107,21 @@ export default function PlannerHabitTracker() {
         const data = await response.json();
         let weekData = data.weekData;
         
-        // Carry over future tasks from the most recent previous week only
+        // Carry over future tasks from the immediate previous week only
         if (!weekData.futureTasks || weekData.futureTasks.length === 0) {
-          // Sort weeks chronologically to find the most recent week with future tasks
-          const sortedWeeks = Object.keys(allWeeksData).sort((a, b) => {
-            const dateA = new Date(a);
-            const dateB = new Date(b);
-            return dateB.getTime() - dateA.getTime(); // Most recent first
-          });
+          // Calculate the previous week's date (7 days before current week)
+          const currentWeekDate = new Date(currentWeekKey);
+          const previousWeekDate = new Date(currentWeekDate);
+          previousWeekDate.setDate(previousWeekDate.getDate() - 7);
+          const previousWeekKey = getMondayOfWeek(previousWeekDate).toISOString().split('T')[0];
           
-          // Find the most recent week that has future tasks (excluding current week)
-          const currentWeekKeyString = currentWeekKey;
-          for (const weekKey of sortedWeeks) {
-            if (weekKey !== currentWeekKeyString) {
-              const prevWeekData = allWeeksData[weekKey];
-              if (prevWeekData?.futureTasks && prevWeekData.futureTasks.length > 0) {
-                weekData = {
-                  ...weekData,
-                  futureTasks: [...prevWeekData.futureTasks]
-                };
-                break; // Only take from the most recent week with future tasks
-              }
-            }
+          // Only check the immediate previous week for future tasks
+          const prevWeekData = allWeeksData[previousWeekKey];
+          if (prevWeekData?.futureTasks && prevWeekData.futureTasks.length > 0) {
+            weekData = {
+              ...weekData,
+              futureTasks: [...prevWeekData.futureTasks]
+            };
           }
         }
         
