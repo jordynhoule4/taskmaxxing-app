@@ -1,41 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import sqlite3 from 'sqlite3';
-import { open } from 'sqlite';
-import path from 'path';
-import { verifyToken } from '@/lib/auth';
-import { cookies } from 'next/headers';
-
-async function getDatabase() {
-  const dbPath = path.join(process.cwd(), 'database.sqlite');
-  return open({
-    filename: dbPath,
-    driver: sqlite3.Database,
-  });
-}
-
-async function getUserFromToken(request: NextRequest) {
-  const cookieStore = cookies();
-  const token = cookieStore.get('auth-token')?.value;
-  
-  if (!token) {
-    return null;
-  }
-
-  try {
-    const payload = await verifyToken(token);
-    return payload?.userId;
-  } catch (error) {
-    return null;
-  }
-}
+import { query } from '@/lib/db';
+import { getUserFromRequest } from '@/lib/auth';
 
 export async function PUT(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    const userId = await getUserFromToken(request);
-    if (!userId) {
+    const user = await getUserFromRequest(request);
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -50,32 +23,22 @@ export async function PUT(
       return NextResponse.json({ error: 'Title is required' }, { status: 400 });
     }
 
-    const db = await getDatabase();
-    
     // Check if note exists and belongs to user
-    const existingNote = await db.get(
-      'SELECT id FROM notes WHERE id = ? AND user_id = ?',
-      [noteId, userId]
+    const existingResult = await query(
+      'SELECT id FROM notes WHERE id = $1 AND user_id = $2',
+      [noteId, user.userId]
     );
 
-    if (!existingNote) {
-      await db.close();
+    if (existingResult.rows.length === 0) {
       return NextResponse.json({ error: 'Note not found' }, { status: 404 });
     }
 
-    await db.run(
-      'UPDATE notes SET title = ?, content = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?',
-      [title.trim(), content || '', noteId, userId]
+    const result = await query(
+      'UPDATE notes SET title = $1, content = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3 AND user_id = $4 RETURNING id, title, content, created_at as "createdAt", updated_at as "updatedAt"',
+      [title.trim(), content || '', noteId, user.userId]
     );
 
-    const updatedNote = await db.get(
-      'SELECT id, title, content, created_at as createdAt, updated_at as updatedAt FROM notes WHERE id = ?',
-      [noteId]
-    );
-
-    await db.close();
-
-    return NextResponse.json({ note: updatedNote });
+    return NextResponse.json({ note: result.rows[0] });
   } catch (error) {
     console.error('Error updating note:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
@@ -87,8 +50,8 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    const userId = await getUserFromToken(request);
-    if (!userId) {
+    const user = await getUserFromRequest(request);
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -97,25 +60,20 @@ export async function DELETE(
       return NextResponse.json({ error: 'Invalid note ID' }, { status: 400 });
     }
 
-    const db = await getDatabase();
-    
     // Check if note exists and belongs to user
-    const existingNote = await db.get(
-      'SELECT id FROM notes WHERE id = ? AND user_id = ?',
-      [noteId, userId]
+    const existingResult = await query(
+      'SELECT id FROM notes WHERE id = $1 AND user_id = $2',
+      [noteId, user.userId]
     );
 
-    if (!existingNote) {
-      await db.close();
+    if (existingResult.rows.length === 0) {
       return NextResponse.json({ error: 'Note not found' }, { status: 404 });
     }
 
-    await db.run(
-      'DELETE FROM notes WHERE id = ? AND user_id = ?',
-      [noteId, userId]
+    await query(
+      'DELETE FROM notes WHERE id = $1 AND user_id = $2',
+      [noteId, user.userId]
     );
-
-    await db.close();
 
     return NextResponse.json({ message: 'Note deleted successfully' });
   } catch (error) {

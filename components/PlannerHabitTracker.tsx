@@ -106,25 +106,20 @@ export default function PlannerHabitTracker() {
       if (response.ok) {
         const data = await response.json();
         let weekData = data.weekData;
-        
+
         // Carry over future tasks from the immediate previous week only
         if (!weekData.futureTasks || weekData.futureTasks.length === 0) {
-          // Calculate the previous week's date (7 days before current week)
-          const currentWeekDate = new Date(currentWeekKey);
-          const previousWeekDate = new Date(currentWeekDate);
-          previousWeekDate.setDate(previousWeekDate.getDate() - 7);
-          const previousWeekKey = getMondayOfWeek(previousWeekDate).toISOString().split('T')[0];
-          
-          // Only check the immediate previous week for future tasks
-          const prevWeekData = allWeeksData[previousWeekKey];
-          if (prevWeekData?.futureTasks && prevWeekData.futureTasks.length > 0) {
+          const transferredTasks = await transferFutureTasksFromPreviousWeek();
+          if (transferredTasks.length > 0) {
             weekData = {
               ...weekData,
-              futureTasks: [...prevWeekData.futureTasks]
+              futureTasks: transferredTasks
             };
+            // Save the transferred tasks to persist them
+            await saveWeekData(weekData);
           }
         }
-        
+
         setAllWeeksData((prev: any) => ({
           ...prev,
           [currentWeekKey]: weekData
@@ -132,6 +127,44 @@ export default function PlannerHabitTracker() {
       }
     } catch (error) {
       console.error('Failed to load week data:', error);
+    }
+  };
+
+  const transferFutureTasksFromPreviousWeek = async () => {
+    try {
+      // Parse current week key correctly (M/D/YYYY format)
+      const [month, day, year] = currentWeekKey.split('/').map(num => parseInt(num));
+      const currentWeekDate = new Date(year, month - 1, day);
+
+      // Calculate previous week (7 days before)
+      const previousWeekDate = new Date(currentWeekDate);
+      previousWeekDate.setDate(previousWeekDate.getDate() - 7);
+
+      // Format previous week key in same M/D/YYYY format
+      const prevMonth = previousWeekDate.getMonth() + 1;
+      const prevDay = previousWeekDate.getDate();
+      const prevYear = previousWeekDate.getFullYear();
+      const previousWeekKey = `${prevMonth}/${prevDay}/${prevYear}`;
+
+      // Check if previous week data exists in our loaded data
+      const prevWeekData = allWeeksData[previousWeekKey];
+      if (prevWeekData?.futureTasks && prevWeekData.futureTasks.length > 0) {
+        // Simply return the previous week's future tasks as-is
+        return [...prevWeekData.futureTasks];
+      }
+
+      // If not in memory, try to fetch the previous week's data
+      const prevResponse = await fetch(`/api/weeks?week=${previousWeekKey}`);
+      if (prevResponse.ok) {
+        const prevData = await prevResponse.json();
+        const prevFutureTasks = prevData.weekData?.futureTasks || [];
+        return [...prevFutureTasks];
+      }
+
+      return [];
+    } catch (error) {
+      console.error('Failed to transfer future tasks:', error);
+      return [];
     }
   };
 
