@@ -10,6 +10,18 @@ interface Habit {
   target: number;
 }
 
+// Generate a unique ID using crypto API (browser-safe)
+const generateUniqueId = (): number => {
+  // Use crypto.randomUUID if available, otherwise fall back to a combination approach
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    // Convert UUID to a number by hashing the first 8 hex chars
+    const uuid = crypto.randomUUID().replace(/-/g, '');
+    return parseInt(uuid.substring(0, 15), 16);
+  }
+  // Fallback: combine timestamp with random number for uniqueness
+  return Date.now() * 1000 + Math.floor(Math.random() * 1000);
+};
+
 // Helper function to get Monday of current week
 const getMondayOfWeek = (date: Date) => {
   const d = new Date(date);
@@ -77,6 +89,16 @@ export default function PlannerHabitTracker() {
 
   const loadInitialData = async () => {
     try {
+      // IMPORTANT: Load all weeks data FIRST, before habits
+      // This prevents a race condition where loadWeekData runs before allWeeksData is available
+      const allWeeksResponse = await fetch('/api/weeks?all=true');
+      let loadedWeeksData: any = {};
+      if (allWeeksResponse.ok) {
+        const allWeeksDataResponse = await allWeeksResponse.json();
+        loadedWeeksData = allWeeksDataResponse.allWeeksData || {};
+        setAllWeeksData(loadedWeeksData);
+      }
+
       const habitsResponse = await fetch('/api/habits');
       if (habitsResponse.ok) {
         const habitsData = await habitsResponse.json();
@@ -85,12 +107,6 @@ export default function PlannerHabitTracker() {
       } else {
         console.error('Failed to fetch habits:', habitsResponse.status, habitsResponse.statusText);
         setHabits([]);
-      }
-
-      const allWeeksResponse = await fetch('/api/weeks?all=true');
-      if (allWeeksResponse.ok) {
-        const allWeeksData = await allWeeksResponse.json();
-        setAllWeeksData(allWeeksData.allWeeksData);
       }
     } catch (error) {
       console.error('Failed to load initial data:', error);
@@ -106,9 +122,11 @@ export default function PlannerHabitTracker() {
       if (response.ok) {
         const data = await response.json();
         let weekData = data.weekData;
+        const isNewWeek = data.isNewWeek === true;
 
-        // Carry over future tasks from the immediate previous week only
-        if (!weekData.futureTasks || weekData.futureTasks.length === 0) {
+        // Carry over future tasks from the immediate previous week only if this is a NEW week
+        // (i.e., the week doesn't exist in the database yet)
+        if (isNewWeek) {
           const transferredTasks = await transferFutureTasksFromPreviousWeek();
           if (transferredTasks.length > 0) {
             weekData = {
@@ -219,8 +237,8 @@ export default function PlannerHabitTracker() {
       const updatedTasks = {
         ...dailyTasks,
         [day]: [...(dailyTasks[day] || []), { 
-          id: Date.now(), 
-          text: taskText, 
+          id: generateUniqueId(),
+          text: taskText,
           completed: false,
           originalDay: day,
           completionStatus: null
@@ -420,7 +438,7 @@ export default function PlannerHabitTracker() {
     
     // Create a new task with a new ID but same text and original day
     const duplicatedTask = {
-      id: Date.now(),
+      id: generateUniqueId(),
       text: task.text,
       completed: false,
       originalDay: toDay,
@@ -443,7 +461,7 @@ export default function PlannerHabitTracker() {
   const addFutureTask = () => {
     if (newFutureTask.trim()) {
       const updatedFutureTasks = [...(futureTasks || []), {
-        id: Date.now(),
+        id: generateUniqueId(),
         text: newFutureTask,
         completed: false,
         originalDay: null,
@@ -452,6 +470,28 @@ export default function PlannerHabitTracker() {
       }];
       updateCurrentWeekData({ futureTasks: updatedFutureTasks });
       setNewFutureTask('');
+    }
+  };
+
+  const importFutureTasksFromPreviousWeek = async () => {
+    const transferredTasks = await transferFutureTasksFromPreviousWeek();
+    if (transferredTasks.length > 0) {
+      // Merge with existing future tasks, avoiding duplicates by checking text
+      const existingTexts = new Set((futureTasks || []).map((t: any) => t.text));
+      const newTasks = transferredTasks.filter((t: any) => !existingTexts.has(t.text));
+
+      if (newTasks.length > 0) {
+        const updatedFutureTasks = [...(futureTasks || []), ...newTasks.map((t: any) => ({
+          ...t,
+          id: generateUniqueId()
+        }))];
+        updateCurrentWeekData({ futureTasks: updatedFutureTasks });
+        alert(`Imported ${newTasks.length} task(s) from the previous week!`);
+      } else {
+        alert('No new tasks to import (all tasks already exist in current week).');
+      }
+    } else {
+      alert('No future tasks found in the previous week.');
     }
   };
 
@@ -572,7 +612,7 @@ export default function PlannerHabitTracker() {
 
   const addWeeklyGoal = () => {
     if (newGoal.trim()) {
-      const updatedGoals = [...weeklyGoals, { id: Date.now(), text: newGoal, completed: false }];
+      const updatedGoals = [...weeklyGoals, { id: generateUniqueId(), text: newGoal, completed: false }];
       updateCurrentWeekData({ weeklyGoals: updatedGoals });
       setNewGoal('');
     }
@@ -1056,13 +1096,22 @@ export default function PlannerHabitTracker() {
               }
             }}
           >
-            <h2 className="text-xl font-semibold text-gray-800 mb-4 flex items-center gap-2">
-              <Calendar className="text-indigo-600" />
-              Future Tasks
-              {selectedTaskForMove && selectedTaskForMove.fromDay !== 'future' && (
-                <span className="ml-2 text-xs text-blue-600">(Tap to move here)</span>
-              )}
-            </h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-semibold text-gray-800 flex items-center gap-2">
+                <Calendar className="text-indigo-600" />
+                Future Tasks
+                {selectedTaskForMove && selectedTaskForMove.fromDay !== 'future' && (
+                  <span className="ml-2 text-xs text-blue-600">(Tap to move here)</span>
+                )}
+              </h2>
+              <button
+                onClick={importFutureTasksFromPreviousWeek}
+                className="px-2 py-1 text-xs bg-indigo-100 text-indigo-700 rounded hover:bg-indigo-200 transition-colors"
+                title="Import unscheduled tasks from the previous week"
+              >
+                Import from prev week
+              </button>
+            </div>
             
             <div className="mb-4 flex gap-2">
               <input

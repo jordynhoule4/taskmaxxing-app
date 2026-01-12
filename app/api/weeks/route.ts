@@ -40,6 +40,7 @@ export async function GET(request: NextRequest) {
     const weekData = await getWeekData(user.userId as number, weekKey);
     
     if (!weekData) {
+      // Return isNewWeek: true to let frontend know this week doesn't exist yet
       return NextResponse.json({
         weekData: {
           dailyTasks: {},
@@ -47,7 +48,8 @@ export async function GET(request: NextRequest) {
           habitCompletions: {},
           weekLocked: false,
           futureTasks: []
-        }
+        },
+        isNewWeek: true
       });
     }
 

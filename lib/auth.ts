@@ -2,7 +2,16 @@ import bcrypt from 'bcryptjs';
 import { SignJWT, jwtVerify } from 'jose';
 import { NextRequest } from 'next/server';
 
-const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET || 'your-secret-key');
+// Ensure JWT_SECRET is set in production
+const getJwtSecret = () => {
+  const secret = process.env.JWT_SECRET;
+  if (process.env.NODE_ENV === 'production' && !secret) {
+    throw new Error('JWT_SECRET environment variable must be set in production');
+  }
+  return new TextEncoder().encode(secret || 'dev-only-secret-key');
+};
+
+const JWT_SECRET = getJwtSecret();
 
 export async function hashPassword(password: string): Promise<string> {
   return bcrypt.hash(password, 12);
@@ -67,5 +76,12 @@ export function validateName(name: string): { valid: boolean; message?: string }
 }
 
 export function sanitizeInput(input: string): string {
-  return input.trim().replace(/[<>]/g, '');
+  // More comprehensive sanitization to prevent XSS and injection attacks
+  return input
+    .trim()
+    .replace(/[<>]/g, '') // Remove angle brackets
+    .replace(/javascript:/gi, '') // Remove javascript: protocol
+    .replace(/on\w+=/gi, '') // Remove event handlers like onclick=
+    .replace(/data:/gi, '') // Remove data: protocol
+    .substring(0, 1000); // Limit length to prevent DoS
 }
