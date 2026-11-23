@@ -30,6 +30,71 @@ const getMondayOfWeek = (date: Date) => {
   return new Date(d.setDate(diff));
 };
 
+// ---- Date helpers (all local-time, date-only) ----
+const DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
+const addDays = (date: Date, n: number) =>
+  new Date(date.getFullYear(), date.getMonth(), date.getDate() + n);
+
+const startOfDay = (date: Date) =>
+  new Date(date.getFullYear(), date.getMonth(), date.getDate());
+
+// Week key format used in the DB: M/D/YYYY (Monday of the week)
+const formatWeekKey = (monday: Date) =>
+  `${monday.getMonth() + 1}/${monday.getDate()}/${monday.getFullYear()}`;
+
+const parseWeekKey = (key: string) => {
+  const [m, d, y] = key.split('/').map(n => parseInt(n, 10));
+  return new Date(y, m - 1, d);
+};
+
+// Due dates are stored as YYYY-MM-DD (matches <input type="date">)
+const toDateKey = (date: Date) => {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
+
+const parseDateKey = (key: string) => {
+  const [y, m, d] = key.split('-').map(n => parseInt(n, 10));
+  return new Date(y, m - 1, d);
+};
+
+const formatShortDate = (date: Date) => `${date.getMonth() + 1}/${date.getDate()}`;
+
+// Date of a given weekday (0 = Monday) within the week starting at `monday`
+const getDateForDay = (monday: Date, dayIndex: number) => addDays(startOfDay(monday), dayIndex);
+
+type DueType = 'hard' | 'soft';
+
+interface DueTaskEntry {
+  id: number;
+  text: string;
+  completed: boolean;
+  dueDate: string;
+  dueType: DueType;
+  weekKey: string;
+  location: string; // day name or 'future'
+}
+
+function DueBadge({ task }: { task: any }) {
+  if (!task?.dueDate) return null;
+  const due = parseDateKey(task.dueDate);
+  const overdue = !task.completed && due.getTime() < startOfDay(new Date()).getTime();
+  const hard = task.dueType === 'hard';
+  return (
+    <span
+      className={`ml-2 inline-block align-middle text-xs px-1.5 py-0.5 rounded whitespace-nowrap ${
+        hard ? 'bg-red-100 text-red-700 font-bold' : 'bg-amber-100 text-amber-700'
+      } ${overdue ? 'ring-1 ring-red-400' : ''}`}
+      title={`${hard ? 'Hard deadline' : 'Soft deadline'}: ${due.toLocaleDateString()}${overdue ? ' (overdue)' : ''}`}
+    >
+      {hard ? 'DUE' : 'due'} {formatShortDate(due)}{overdue ? ' !' : ''}
+    </span>
+  );
+}
+
 export default function PlannerHabitTracker() {
   const router = useRouter();
   const [currentWeekDate, setCurrentWeekDate] = useState(() => getMondayOfWeek(new Date()));
@@ -49,9 +114,12 @@ export default function PlannerHabitTracker() {
   const [editTaskText, setEditTaskText] = useState('');
   const [taskNotesOpen, setTaskNotesOpen] = useState<{taskId: number, day: string} | null>(null);
   const [taskNoteText, setTaskNoteText] = useState('');
+  const [taskDueDate, setTaskDueDate] = useState('');
+  const [taskDueType, setTaskDueType] = useState<DueType>('hard');
   const [showCalendar, setShowCalendar] = useState(false);
 
-  const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+  const days = DAY_NAMES;
+  const today = startOfDay(new Date());
 
   const getCurrentWeekKey = () => {
     const month = currentWeekDate.getMonth() + 1;
@@ -436,13 +504,16 @@ export default function PlannerHabitTracker() {
     
     const { task } = taskToDuplicate;
     
-    // Create a new task with a new ID but same text and original day
+    // Create a new task with a new ID but same text, notes, and due date
     const duplicatedTask = {
       id: generateUniqueId(),
       text: task.text,
       completed: false,
       originalDay: toDay,
-      completionStatus: null
+      completionStatus: null,
+      notes: task.notes || '',
+      dueDate: task.dueDate || null,
+      dueType: task.dueDate ? (task.dueType || 'soft') : null
     };
     
     const updatedTasks = {
@@ -579,35 +650,83 @@ export default function PlannerHabitTracker() {
   const openTaskNotes = (day: string, task: any) => {
     setTaskNotesOpen({ taskId: task.id, day });
     setTaskNoteText(task.notes || '');
+    setTaskDueDate(task.dueDate || '');
+    setTaskDueType(task.dueType === 'soft' ? 'soft' : 'hard');
   };
 
   const saveTaskNotes = () => {
     if (!taskNotesOpen) return;
-    
+
     const { taskId, day } = taskNotesOpen;
-    
+    const detailUpdates = {
+      notes: taskNoteText,
+      dueDate: taskDueDate || null,
+      dueType: taskDueDate ? taskDueType : null
+    };
+
     if (day === 'future') {
-      const updatedFutureTasks = (futureTasks || []).map((task: any) => 
-        task.id === taskId ? { ...task, notes: taskNoteText } : task
+      const updatedFutureTasks = (futureTasks || []).map((task: any) =>
+        task.id === taskId ? { ...task, ...detailUpdates } : task
       );
       updateCurrentWeekData({ futureTasks: updatedFutureTasks });
     } else {
       const updatedTasks = {
         ...dailyTasks,
-        [day]: dailyTasks[day].map((task: any) => 
-          task.id === taskId ? { ...task, notes: taskNoteText } : task
+        [day]: dailyTasks[day].map((task: any) =>
+          task.id === taskId ? { ...task, ...detailUpdates } : task
         )
       };
       updateCurrentWeekData({ dailyTasks: updatedTasks });
     }
-    
-    setTaskNotesOpen(null);
-    setTaskNoteText('');
+
+    closeTaskNotes();
   };
 
   const closeTaskNotes = () => {
     setTaskNotesOpen(null);
     setTaskNoteText('');
+    setTaskDueDate('');
+    setTaskDueType('hard');
+  };
+
+  // Gather every task with a due date across all loaded weeks, for the calendar.
+  // Future tasks carry over between weeks with the same id (and sometimes a new id
+  // via "Import from prev week"), so dedupe by id and by text+dueDate, newest week first.
+  const collectDueTasks = (): DueTaskEntry[] => {
+    const weekKeys = Object.keys(allWeeksData).sort(
+      (a, b) => parseWeekKey(b).getTime() - parseWeekKey(a).getTime()
+    );
+    const seenIds = new Set<number>();
+    const seenFuture = new Set<string>();
+    const result: DueTaskEntry[] = [];
+
+    for (const weekKey of weekKeys) {
+      const week = allWeeksData[weekKey] || {};
+      Object.entries(week.dailyTasks || {}).forEach(([day, tasks]: [string, any]) => {
+        (tasks || []).forEach((t: any) => {
+          if (!t.dueDate || seenIds.has(t.id)) return;
+          seenIds.add(t.id);
+          result.push({
+            id: t.id, text: t.text, completed: !!t.completed,
+            dueDate: t.dueDate, dueType: t.dueType === 'hard' ? 'hard' : 'soft',
+            weekKey, location: day
+          });
+        });
+      });
+      (week.futureTasks || []).forEach((t: any) => {
+        if (!t.dueDate || seenIds.has(t.id)) return;
+        const futureKey = `${t.text}|${t.dueDate}`;
+        if (seenFuture.has(futureKey)) return;
+        seenIds.add(t.id);
+        seenFuture.add(futureKey);
+        result.push({
+          id: t.id, text: t.text, completed: false,
+          dueDate: t.dueDate, dueType: t.dueType === 'hard' ? 'hard' : 'soft',
+          weekKey, location: 'future'
+        });
+      });
+    }
+    return result;
   };
 
   const addWeeklyGoal = () => {
@@ -682,47 +801,39 @@ export default function PlannerHabitTracker() {
   };
 
   const calculateHabitStreak = (habitId: number): { current: number; best: number } => {
-    const sortedWeeks = Object.keys(allWeeksData).sort((a, b) => {
-      const dateA = new Date(a);
-      const dateB = new Date(b);
-      return dateA.getTime() - dateB.getTime();
-    });
-
-    let currentStreak = 0;
-    let bestStreak = 0;
-    let tempStreak = 0;
-    
-    // Find the habit to get target
     const habit = habits.find(h => h.id === habitId);
     const target = habit?.target || 7;
 
-    // Calculate streaks by going through weeks chronologically
+    const meetsTarget = (weekKey: string) => {
+      const completions = allWeeksData[weekKey]?.habitCompletions || {};
+      return days.filter(day => completions[habitId]?.[day]).length >= target;
+    };
+
+    // Best streak: longest run of calendar-consecutive weeks that hit the target.
+    // Weeks are keyed by their Monday, so "previous week" = Monday minus 7 days.
+    const sortedWeeks = Object.keys(allWeeksData).sort(
+      (a, b) => parseWeekKey(a).getTime() - parseWeekKey(b).getTime()
+    );
+    const streakEndingAt: { [weekKey: string]: number } = {};
+    let bestStreak = 0;
     for (const weekKey of sortedWeeks) {
-      const weekData = allWeeksData[weekKey];
-      const habitCompletions = weekData?.habitCompletions || {};
-      const weekCompletions = days.filter(day => habitCompletions[habitId]?.[day]).length;
-      
-      // If week meets target, increment streak
-      if (weekCompletions >= target) {
-        tempStreak++;
-        bestStreak = Math.max(bestStreak, tempStreak);
-      } else {
-        tempStreak = 0;
-      }
+      if (!meetsTarget(weekKey)) continue;
+      const prevKey = formatWeekKey(addDays(parseWeekKey(weekKey), -7));
+      streakEndingAt[weekKey] = (streakEndingAt[prevKey] || 0) + 1;
+      bestStreak = Math.max(bestStreak, streakEndingAt[weekKey]);
     }
 
-    // Current streak is the streak up to the most recent week
-    const recentWeeks = sortedWeeks.slice(-10).reverse(); // Get last 10 weeks, most recent first
-    for (const weekKey of recentWeeks) {
-      const weekData = allWeeksData[weekKey];
-      const habitCompletions = weekData?.habitCompletions || {};
-      const weekCompletions = days.filter(day => habitCompletions[habitId]?.[day]).length;
-      
-      if (weekCompletions >= target) {
-        currentStreak++;
-      } else {
-        break;
-      }
+    // Current streak: walk backwards from the real current week (not whichever
+    // week happens to be loaded last). The in-progress week doesn't break the
+    // streak if its target isn't met yet; it just isn't counted until it is.
+    let cursor = startOfDay(getMondayOfWeek(new Date()));
+    if (!meetsTarget(formatWeekKey(cursor))) {
+      cursor = addDays(cursor, -7);
+    }
+    let currentStreak = 0;
+    while (meetsTarget(formatWeekKey(cursor))) {
+      currentStreak++;
+      cursor = addDays(cursor, -7);
     }
 
     return { current: currentStreak, best: bestStreak };
@@ -821,7 +932,10 @@ export default function PlannerHabitTracker() {
       {showCalendar && (
         <div className="bg-white rounded-lg shadow-lg p-4 mb-6 relative">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-gray-800">Jump to Week</h3>
+            <div>
+              <h3 className="text-lg font-semibold text-gray-800">Calendar</h3>
+              <p className="text-xs text-gray-500">Tap a day to jump to its week. Due tasks are shown on their due date.</p>
+            </div>
             <button
               onClick={() => setShowCalendar(false)}
               className="text-gray-500 hover:text-gray-700"
@@ -829,7 +943,11 @@ export default function PlannerHabitTracker() {
               <X size={20} />
             </button>
           </div>
-          <CalendarWidget currentWeekDate={currentWeekDate} onSelectWeek={jumpToWeek} />
+          <CalendarWidget
+            currentWeekDate={currentWeekDate}
+            onSelectWeek={jumpToWeek}
+            dueTasks={collectDueTasks()}
+          />
         </div>
       )}
 
@@ -865,7 +983,14 @@ export default function PlannerHabitTracker() {
                 >
                   <div className="flex items-center justify-between mb-2">
                     <h3 className="font-semibold text-gray-700">
-                      {day}:
+                      {day}
+                      <span className="ml-1.5 text-sm font-normal text-gray-400">
+                        {formatShortDate(getDateForDay(currentWeekDate, days.indexOf(day)))}
+                      </span>
+                      {getDateForDay(currentWeekDate, days.indexOf(day)).getTime() === today.getTime() && (
+                        <span className="ml-1.5 text-xs px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 font-medium">Today</span>
+                      )}
+                      :
                       {selectedTaskForMove && selectedTaskForMove.fromDay !== day && (
                         <span className="ml-2 text-xs text-blue-600">
                           {selectedTaskForMove.fromDay === 'future' ? '(Tap to schedule here)' : '(Tap to move here)'}
@@ -956,6 +1081,7 @@ export default function PlannerHabitTracker() {
                         ) : (
                           <span className={`flex-1 ${task.completed ? 'line-through' : ''}`}>
                             {task.text}
+                            <DueBadge task={task} />
                             {task.completed && task.completionStatus && (
                               <span className="ml-2 text-xs">
                                 {task.completionStatus === 'early' ? '(Early)' : task.completionStatus === 'late' ? '(Late)' : ''}
@@ -974,11 +1100,11 @@ export default function PlannerHabitTracker() {
                                 openTaskNotes(day, task);
                               }}
                               className={`transition-colors ${
-                                task.notes && task.notes.trim() 
-                                  ? 'text-purple-600 hover:text-purple-800' 
+                                (task.notes && task.notes.trim()) || task.dueDate
+                                  ? 'text-purple-600 hover:text-purple-800'
                                   : 'text-gray-400 hover:text-purple-600'
                               }`}
-                              title="Task notes"
+                              title="Notes & due date"
                             >
                               <MessageSquare size={16} />
                             </button>
@@ -1183,6 +1309,7 @@ export default function PlannerHabitTracker() {
                       <Move className="text-gray-400" size={16} />
                       <span className="flex-1 text-gray-700">
                         {task.text}
+                        <DueBadge task={task} />
                         <span className="ml-2 text-xs text-indigo-600">(Drag to schedule)</span>
                       </span>
                       <div className="flex items-center gap-1">
@@ -1192,11 +1319,11 @@ export default function PlannerHabitTracker() {
                             openTaskNotes('future', task);
                           }}
                           className={`transition-colors ${
-                            task.notes && task.notes.trim() 
-                              ? 'text-purple-600 hover:text-purple-800' 
+                            (task.notes && task.notes.trim()) || task.dueDate
+                              ? 'text-purple-600 hover:text-purple-800'
                               : 'text-gray-400 hover:text-purple-600'
                           }`}
-                          title="Task notes"
+                          title="Notes & due date"
                         >
                           <MessageSquare size={16} />
                         </button>
@@ -1305,12 +1432,12 @@ export default function PlannerHabitTracker() {
                       <div className="flex gap-1">
                         {days.map(day => {
                           const isCompleted = habitCompletions[habit.id]?.[day];
-                          const dayIndex = days.indexOf(day);
-                          const today = new Date().getDay();
-                          const mondayBasedIndex = today === 0 ? 6 : today - 1; // Convert Sunday=0 to Monday=0 system
-                          const isPastDay = dayIndex < mondayBasedIndex;
-                          const isToday = dayIndex === mondayBasedIndex;
-                          
+                          // Compare against the real date of this day in the viewed week,
+                          // so past weeks show as fully past and future weeks as upcoming.
+                          const dayDate = getDateForDay(currentWeekDate, days.indexOf(day));
+                          const isPastDay = dayDate.getTime() < today.getTime();
+                          const isToday = dayDate.getTime() === today.getTime();
+
                           return (
                             <div key={day} className="flex-1 h-1 rounded-full bg-gray-200 relative">
                               <div 
@@ -1337,22 +1464,42 @@ export default function PlannerHabitTracker() {
                       <X size={14} />
                     </button>
                   </div>
+                  <div className="grid grid-cols-7 gap-1 mb-1">
+                    {days.map(day => {
+                      const dayDate = getDateForDay(currentWeekDate, days.indexOf(day));
+                      const isToday = dayDate.getTime() === today.getTime();
+                      return (
+                        <div
+                          key={day}
+                          className={`w-8 text-center text-[10px] leading-tight ${
+                            isToday ? 'text-blue-600 font-semibold' : 'text-gray-400'
+                          }`}
+                          title={`${day} ${dayDate.toLocaleDateString()}`}
+                        >
+                          {formatShortDate(dayDate)}
+                        </div>
+                      );
+                    })}
+                  </div>
                   <div className="grid grid-cols-7 gap-1">
-                    {days.map(day => (
-                      <button
-                        key={day}
-                        onClick={() => toggleHabit(habit.id, day)}
-                        className={`w-8 h-8 rounded border-2 flex items-center justify-center text-xs transition-colors ${
-                          habitCompletions[habit.id]?.[day]
-                            ? 'bg-purple-500 border-purple-500 text-white'
-                            : 'border-gray-300 hover:border-purple-400'
-                        }`}
-                        title={day}
-                      >
-                        {habitCompletions[habit.id]?.[day] && <Check size={12} />}
-                        {!habitCompletions[habit.id]?.[day] && day.charAt(0)}
-                      </button>
-                    ))}
+                    {days.map(day => {
+                      const dayDate = getDateForDay(currentWeekDate, days.indexOf(day));
+                      return (
+                        <button
+                          key={day}
+                          onClick={() => toggleHabit(habit.id, day)}
+                          className={`w-8 h-8 rounded border-2 flex items-center justify-center text-xs transition-colors ${
+                            habitCompletions[habit.id]?.[day]
+                              ? 'bg-purple-500 border-purple-500 text-white'
+                              : 'border-gray-300 hover:border-purple-400'
+                          }`}
+                          title={`${day} ${dayDate.toLocaleDateString()}`}
+                        >
+                          {habitCompletions[habit.id]?.[day] && <Check size={12} />}
+                          {!habitCompletions[habit.id]?.[day] && day.charAt(0)}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               ))}
@@ -1373,7 +1520,9 @@ export default function PlannerHabitTracker() {
             <p>• <strong>Edit Tasks:</strong> Click the <Edit3 className="inline w-3 h-3 mx-1" /> button to edit any task text inline</p>
             <p>• <strong>Desktop:</strong> Drag and drop incomplete tasks between days to reschedule them, or back to Future Tasks</p>
             <p>• <strong>Mobile:</strong> Tap a task (with <Move className="inline w-3 h-3 mx-1" /> icon) to select it, then tap the day or Future Tasks section you want to move it to</p>
-            <p>• <strong>Duplicate:</strong> Click the <Copy className="inline w-3 h-3 mx-1" /> button to copy a task, then tap any day to create a duplicate there</p>
+            <p>• <strong>Duplicate:</strong> Click the <Copy className="inline w-3 h-3 mx-1" /> button to copy a task (including its notes and due date), then tap any day to create a duplicate there</p>
+            <p>• <strong>Due Dates:</strong> Open a task's <MessageSquare className="inline w-3 h-3 mx-1" /> panel to set a due date. <span className="px-1 rounded bg-red-100 text-red-700 font-bold">DUE</span> = hard deadline, <span className="px-1 rounded bg-amber-100 text-amber-700">due</span> = soft deadline. Overdue tasks get a red outline and <strong>!</strong></p>
+            <p>• <strong>Calendar:</strong> Click the 📅 button next to the week title to see every due task on a month calendar and jump to any week</p>
           </div>
           <p>• When you complete a task on a different day than planned:</p>
           <div className="ml-4 space-y-1">
@@ -1400,7 +1549,7 @@ export default function PlannerHabitTracker() {
             <div className="flex items-center justify-between p-4 border-b">
               <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
                 <MessageSquare className="text-purple-600" size={20} />
-                Task Notes
+                Task Details
               </h3>
               <button
                 onClick={closeTaskNotes}
@@ -1420,11 +1569,58 @@ export default function PlannerHabitTracker() {
                 </label>
               </div>
               
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Due date</label>
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    type="date"
+                    value={taskDueDate}
+                    onChange={(e) => setTaskDueDate(e.target.value)}
+                    className="px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
+                  />
+                  <div className="inline-flex rounded-md overflow-hidden border border-gray-300">
+                    <button
+                      type="button"
+                      onClick={() => setTaskDueType('hard')}
+                      className={`px-3 py-1 text-xs font-bold transition-colors ${
+                        taskDueType === 'hard' ? 'bg-red-600 text-white' : 'bg-white text-gray-600 hover:bg-red-50'
+                      }`}
+                      title="Hard deadline"
+                    >
+                      DUE
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTaskDueType('soft')}
+                      className={`px-3 py-1 text-xs transition-colors border-l border-gray-300 ${
+                        taskDueType === 'soft' ? 'bg-amber-500 text-white' : 'bg-white text-gray-600 hover:bg-amber-50'
+                      }`}
+                      title="Soft deadline"
+                    >
+                      due
+                    </button>
+                  </div>
+                  {taskDueDate && (
+                    <button
+                      type="button"
+                      onClick={() => setTaskDueDate('')}
+                      className="text-xs text-gray-500 hover:text-red-600 transition-colors"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  <strong className="text-red-700">DUE</strong> = hard deadline &nbsp;·&nbsp; <span className="text-amber-700">due</span> = soft deadline
+                </p>
+              </div>
+
+              <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
               <textarea
                 value={taskNoteText}
                 onChange={(e) => setTaskNoteText(e.target.value)}
                 placeholder="Add detailed notes about this task..."
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 min-h-[200px] resize-vertical text-sm"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 min-h-[160px] resize-vertical text-sm"
                 autoFocus
               />
             </div>
@@ -1441,7 +1637,7 @@ export default function PlannerHabitTracker() {
                 className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors flex items-center gap-2"
               >
                 <Save size={16} />
-                Save Notes
+                Save
               </button>
             </div>
           </div>
@@ -1454,9 +1650,10 @@ export default function PlannerHabitTracker() {
 interface CalendarWidgetProps {
   currentWeekDate: Date;
   onSelectWeek: (date: Date) => void;
+  dueTasks: DueTaskEntry[];
 }
 
-function CalendarWidget({ currentWeekDate, onSelectWeek }: CalendarWidgetProps) {
+function CalendarWidget({ currentWeekDate, onSelectWeek, dueTasks }: CalendarWidgetProps) {
   const [calendarDate, setCalendarDate] = useState(() => new Date(currentWeekDate));
   
   const monthNames = [
@@ -1464,55 +1661,65 @@ function CalendarWidget({ currentWeekDate, onSelectWeek }: CalendarWidgetProps) 
     'July', 'August', 'September', 'October', 'November', 'December'
   ];
   
-  const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const daysOfWeek = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const today = startOfDay(new Date());
   
+  // Build the month grid, Monday-first to match the planner
   const getDaysInMonth = (date: Date) => {
     const year = date.getFullYear();
     const month = date.getMonth();
     const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
-    const daysInMonth = lastDay.getDate();
-    const startingDayOfWeek = firstDay.getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const startingDayOfWeek = (firstDay.getDay() + 6) % 7; // Sunday=0 -> Monday=0 system
     
-    const days = [];
-    
-    // Add empty cells for days before the first day of the month
-    for (let i = 0; i < startingDayOfWeek; i++) {
-      days.push(null);
-    }
-    
-    // Add all days of the month
-    for (let day = 1; day <= daysInMonth; day++) {
-      days.push(new Date(year, month, day));
-    }
-    
-    return days;
+    const cells: (Date | null)[] = [];
+    for (let i = 0; i < startingDayOfWeek; i++) cells.push(null);
+    for (let day = 1; day <= daysInMonth; day++) cells.push(new Date(year, month, day));
+    return cells;
   };
   
-  const getMondayOfWeek = (date: Date) => {
-    const d = new Date(date);
-    const day = d.getDay();
-    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-    return new Date(d.setDate(diff));
-  };
-  
-  const isSameWeek = (date1: Date, date2: Date) => {
-    const monday1 = getMondayOfWeek(date1);
-    const monday2 = getMondayOfWeek(date2);
-    return monday1.getTime() === monday2.getTime();
-  };
+  const isSameWeek = (date1: Date, date2: Date) =>
+    startOfDay(getMondayOfWeek(date1)).getTime() === startOfDay(getMondayOfWeek(date2)).getTime();
   
   const navigateMonth = (direction: number) => {
     const newDate = new Date(calendarDate);
+    newDate.setDate(1);
     newDate.setMonth(newDate.getMonth() + direction);
     setCalendarDate(newDate);
   };
-  
-  const handleDateClick = (date: Date) => {
-    onSelectWeek(date);
+
+  // Group due tasks by their due date; hard deadlines first, then soft
+  const tasksByDate: { [dateKey: string]: DueTaskEntry[] } = {};
+  dueTasks.forEach(task => {
+    (tasksByDate[task.dueDate] = tasksByDate[task.dueDate] || []).push(task);
+  });
+  Object.values(tasksByDate).forEach(list =>
+    list.sort((a, b) => (a.dueType === b.dueType ? 0 : a.dueType === 'hard' ? -1 : 1))
+  );
+
+  const monthPrefix = `${calendarDate.getFullYear()}-${String(calendarDate.getMonth() + 1).padStart(2, '0')}-`;
+  const tasksThisMonth = dueTasks
+    .filter(t => t.dueDate.startsWith(monthPrefix))
+    .sort((a, b) => a.dueDate.localeCompare(b.dueDate) || (a.dueType === b.dueType ? 0 : a.dueType === 'hard' ? -1 : 1));
+
+  const chipClass = (task: DueTaskEntry, overdue: boolean) => {
+    if (task.completed) return 'bg-green-100 text-green-700 line-through';
+    if (task.dueType === 'hard') return `bg-red-100 text-red-700 font-bold ${overdue ? 'ring-1 ring-red-400' : ''}`;
+    return `bg-amber-100 text-amber-700 ${overdue ? 'ring-1 ring-amber-400' : ''}`;
+  };
+
+  const dotClass = (task: DueTaskEntry) => {
+    if (task.completed) return 'bg-green-500';
+    return task.dueType === 'hard' ? 'bg-red-500' : 'bg-amber-400';
+  };
+
+  const jumpToTaskWeek = (e: React.MouseEvent, task: DueTaskEntry) => {
+    e.stopPropagation();
+    onSelectWeek(parseWeekKey(task.weekKey));
   };
   
-  const days = getDaysInMonth(calendarDate);
+  const cells = getDaysInMonth(calendarDate);
+  const MAX_CHIPS = 3;
   
   return (
     <div className="calendar-widget">
@@ -1536,9 +1743,9 @@ function CalendarWidget({ currentWeekDate, onSelectWeek }: CalendarWidgetProps) 
       </div>
       
       {/* Days of Week Header */}
-      <div className="grid grid-cols-7 gap-1 mb-2">
+      <div className="grid grid-cols-7 gap-1 mb-1">
         {daysOfWeek.map(day => (
-          <div key={day} className="text-center text-sm font-medium text-gray-500 py-2">
+          <div key={day} className="text-center text-xs sm:text-sm font-medium text-gray-500 py-1">
             {day}
           </div>
         ))}
@@ -1546,39 +1753,112 @@ function CalendarWidget({ currentWeekDate, onSelectWeek }: CalendarWidgetProps) 
       
       {/* Calendar Grid */}
       <div className="grid grid-cols-7 gap-1">
-        {days.map((date, index) => {
+        {cells.map((date, index) => {
           if (!date) {
-            return <div key={index} className="p-2"></div>;
+            return <div key={index} className="min-h-[56px] sm:min-h-[88px]"></div>;
           }
           
           const isCurrentWeek = isSameWeek(date, currentWeekDate);
-          const isToday = date.toDateString() === new Date().toDateString();
+          const isToday = date.getTime() === today.getTime();
+          const isPast = date.getTime() < today.getTime();
+          const dayTasks = tasksByDate[toDateKey(date)] || [];
           
           return (
-            <button
+            <div
               key={index}
-              onClick={() => handleDateClick(date)}
-              className={`
-                p-2 text-sm rounded hover:bg-blue-100 transition-colors
-                ${isCurrentWeek ? 'bg-blue-500 text-white hover:bg-blue-600' : 'text-gray-700'}
-                ${isToday && !isCurrentWeek ? 'bg-blue-100 font-bold' : ''}
-              `}
+              role="button"
+              tabIndex={0}
+              onClick={() => onSelectWeek(date)}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onSelectWeek(date); }}
+              className={`min-h-[56px] sm:min-h-[88px] p-1 rounded border text-left cursor-pointer transition-colors ${
+                isCurrentWeek ? 'bg-blue-50 border-blue-300 hover:bg-blue-100' : 'border-gray-200 hover:bg-gray-50'
+              } ${isToday ? 'ring-2 ring-blue-500' : ''}`}
               title={`Week of ${getMondayOfWeek(date).toLocaleDateString()}`}
             >
-              {date.getDate()}
-            </button>
+              <div className={`text-xs sm:text-sm mb-0.5 ${isToday ? 'font-bold text-blue-700' : 'text-gray-700'}`}>
+                {date.getDate()}
+              </div>
+
+              {/* Mobile: dots */}
+              {dayTasks.length > 0 && (
+                <div className="flex flex-wrap gap-0.5 sm:hidden">
+                  {dayTasks.slice(0, 6).map(task => (
+                    <span key={task.id} className={`w-1.5 h-1.5 rounded-full ${dotClass(task)}`} />
+                  ))}
+                  {dayTasks.length > 6 && <span className="text-[9px] text-gray-500">+{dayTasks.length - 6}</span>}
+                </div>
+              )}
+
+              {/* Desktop: chips */}
+              <div className="hidden sm:flex flex-col gap-0.5">
+                {dayTasks.slice(0, MAX_CHIPS).map(task => (
+                  <button
+                    key={task.id}
+                    onClick={(e) => jumpToTaskWeek(e, task)}
+                    className={`text-[11px] leading-tight px-1 py-0.5 rounded truncate text-left ${chipClass(task, isPast)}`}
+                    title={`${task.dueType === 'hard' ? 'DUE' : 'due'}: ${task.text} (${task.location === 'future' ? 'Future Tasks' : task.location}, week of ${task.weekKey})`}
+                  >
+                    {task.text}
+                  </button>
+                ))}
+                {dayTasks.length > MAX_CHIPS && (
+                  <span className="text-[10px] text-gray-500 px-1">+{dayTasks.length - MAX_CHIPS} more</span>
+                )}
+              </div>
+            </div>
           );
         })}
       </div>
-      
-      {/* Quick Navigation */}
-      <div className="flex justify-center gap-2 mt-4">
+
+      {/* Legend + Quick Navigation */}
+      <div className="flex flex-wrap items-center justify-between gap-2 mt-3">
+        <div className="flex flex-wrap items-center gap-3 text-xs text-gray-600">
+          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-red-500"></span>DUE (hard)</span>
+          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-amber-400"></span>due (soft)</span>
+          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-green-500"></span>Completed</span>
+        </div>
         <button
           onClick={() => onSelectWeek(new Date())}
           className="px-3 py-1 bg-blue-100 text-blue-700 rounded text-sm hover:bg-blue-200 transition-colors"
         >
           This Week
         </button>
+      </div>
+
+      {/* Due list for the displayed month */}
+      <div className="mt-4 border-t pt-3">
+        <h5 className="text-sm font-semibold text-gray-700 mb-2">
+          Due in {monthNames[calendarDate.getMonth()]}
+        </h5>
+        {tasksThisMonth.length === 0 ? (
+          <p className="text-sm text-gray-400 italic">Nothing due this month. Set a due date from a task's notes panel.</p>
+        ) : (
+          <ul className="space-y-1">
+            {tasksThisMonth.map(task => {
+              const due = parseDateKey(task.dueDate);
+              const overdue = !task.completed && due.getTime() < today.getTime();
+              return (
+                <li key={`${task.id}-${task.weekKey}`}>
+                  <button
+                    onClick={(e) => jumpToTaskWeek(e, task)}
+                    className="w-full flex items-center gap-2 text-left text-sm px-2 py-1 rounded hover:bg-gray-50 transition-colors"
+                    title={`Jump to week of ${task.weekKey}`}
+                  >
+                    <span className={`text-xs px-1.5 py-0.5 rounded whitespace-nowrap ${chipClass(task, overdue)}`}>
+                      {task.dueType === 'hard' ? 'DUE' : 'due'} {formatShortDate(due)}
+                    </span>
+                    <span className={`flex-1 truncate ${task.completed ? 'line-through text-gray-400' : 'text-gray-700'}`}>
+                      {task.text}
+                    </span>
+                    <span className="text-xs text-gray-400 whitespace-nowrap">
+                      {task.location === 'future' ? 'Future Tasks' : task.location}
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </div>
     </div>
   );
